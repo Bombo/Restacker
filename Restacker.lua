@@ -1,29 +1,32 @@
 Restacker = {}
 Restacker.name = "Restacker"
-Restacker.version = "0.3"
+Restacker.version = "0.5"
 
 local lam = LibStub:GetLibrary("LibAddonMenu-2.0")
+local FENCE, TRADE, GUILD_BANK = 1, 2, 3
 
 Restacker.defaultSettings = {
 	onFence = true,
-	onMail = false,
 	onTrade = false,
+	onGuildBank = false,
 	displayStackInfo = true,
 	fcoLock = false,
 	fcoSell = false,
-	fcoSellGuild = false
+	fcoSellGuild = false,
+	itemSaverLock = false
 }
 
-function getIcon(slot)
+local function getIcon(slot)
     local icon = GetItemInfo(BAG_BACKPACK, slot)
     if icon == nil then 
         return ''
     else
-        return zo_iconFormat(icon, 16, 16)
+		local fontSize = GetChatFontSize();
+        return zo_iconFormat(icon, fontSize, fontSize) .. ' '
     end
 end
 
-function displaySkipMessage(slot, fromStackSize, toStackSize, reason)
+local function displaySkipMessage(slot, fromStackSize, toStackSize, reason)
 	local itemLink = GetItemLink(BAG_BACKPACK, slot, LINK_STYLE_DEFAULT)
     local output = zo_strformat('Skipped restacking of <<5>><<t:1>> ([<<2>>][<<3>>]) because of <<4>> settings', itemLink, toStackSize, fromStackSize, reason, getIcon(slot))
     d(output)
@@ -41,11 +44,25 @@ function Restacker.DisplayStackResult(fromSlot, toSlot, fromStackSize, toStackSi
 end
 
 function Restacker.CheckFCOLocks(instanceId)
-    if (FCOIsMarked) then
+    if (FCOIsMarked 
+			and (Restacker.savedVariables.fcoLock
+				or Restacker.savedVariables.fcoSell
+				or Restacker.savedVariables.fcoSellGuild
+			)
+		) then
         local _, flags = FCOIsMarked(instanceId, -1)
-        return (Restacker.savedVariables.fcoLock and flags[1]) or (Restacker.savedVariables.fcoSell and flags[5]) or (Restacker.savedVariables.fcoSellGuild and flags[11])
+        return (Restacker.savedVariables.fcoLock and flags[1]) 
+			or (Restacker.savedVariables.fcoSell and flags[5])
+			or (Restacker.savedVariables.fcoSellGuild and flags[11])
     end
     return false
+end
+
+function Restacker.CheckItemSaverLock(bagSlot)
+	if (ItemSaver_IsItemSaved and Restacker.savedVariables.itemSaverLock) then
+		return ItemSaver_IsItemSaved(BAG_BACKPACK, bagSlot)
+	end
+	return false
 end
 
 function Restacker.RestackBag()
@@ -57,15 +74,25 @@ function Restacker.RestackBag()
 		local instanceId = GetItemInstanceId(BAG_BACKPACK, bagSlot)
 		local skip = false
 		
-		if not skip and stackSize ~= maxStackSize then
+		if not skip and stackSize ~= maxStackSize and not bagSlotData.stolen then
 			if stacks[instanceId] == nil and stackSize < maxStackSize then
-				stacks[instanceId] = {slot = bagSlot, data = bagSlotData, stackSize = stackSize, fcoLocked = Restacker.CheckFCOLocks(instanceId)}
+				stacks[instanceId] = {
+					slot = bagSlot,
+					data = bagSlotData,
+					stackSize = stackSize,
+					fcoLocked = Restacker.CheckFCOLocks(instanceId),
+					itemSaverLocked = Restacker.CheckItemSaverLock(bagSlot)
+				}
 			else
                 local toSlot = stacks[instanceId].slot
                 local toStackSize = stacks[instanceId].stackSize
                 if stacks[instanceId].fcoLocked then
                     if Restacker.savedVariables.displayStackInfo then
                         displaySkipMessage(toSlot, stackSize, toStackSize, 'FCO ItemSaver')
+                    end
+				elseif stacks[instanceId].itemSaverLocked then
+					if Restacker.savedVariables.displayStackInfo then
+                        displaySkipMessage(toSlot, stackSize, toStackSize, 'Item Saver')
                     end
                 else
                     local toSlot = stacks[instanceId].slot
@@ -99,21 +126,31 @@ function Restacker.StackAndUnhook()
 	EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_CLOSE_FENCE)
 end
 
-function Restacker.HookupListener()
+function Restacker.OnFence()
 	--[[ as EVENT_CLOSE_FENCE doesn't seem to work at the moment, we hook up for both
 	     that event and the currently firing EVENT_CLOSE_STORE.
 	--]]
-	if Restacker.savedVariables.onFence then
-		EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_CLOSE_STORE, Restacker.StackAndUnhook)
-		EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_CLOSE_FENCE, Restacker.StackAndUnhook)
-	end
-	
-	if Restacker.savedVariables.onTrade then
+	EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_CLOSE_STORE, Restacker.StackAndUnhook)
+	EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_CLOSE_FENCE, Restacker.StackAndUnhook)
+end
+
+function Restacker.SetEvents(type)
+	if type == FENCE then
+		EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_OPEN_FENCE, Restacker.OnFence)
+	elseif type == TRADE then
 		EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_TRADE_SUCCEEDED, Restacker.RestackBag)
+	elseif type == GUILD_BANK then
+		EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_CLOSE_GUILD_BANK, Restacker.RestackBag)
 	end
-	
-	if Restacker.savedVariables.onMail then
-		EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_MAIL_TAKE_ATTACHED_ITEM_SUCCESS, Restacker.RestackBag)
+end
+
+function Restacker.UnsetEvents(type)
+	if type == FENCE then
+		EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_OPEN_FENCE)
+	elseif type == TRADE then
+		EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_TRADE_SUCCEEDED)
+	elseif type == GUILD_BANK then
+		EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_CLOSE_GUILD_BANK)
 	end
 end
 
@@ -151,6 +188,11 @@ function Restacker.CreateSettingsWindow()
 			end,
 			setFunc = function(newValue)
 				Restacker.savedVariables.onFence = (newValue)
+				if newValue then 
+					Restacker.SetEvents(FENCE)
+				else 
+					Restacker.UnsetEvents(FENCE)
+				end
 			end,
 			width = "full"
 		},
@@ -163,18 +205,28 @@ function Restacker.CreateSettingsWindow()
 			end,
 			setFunc = function(newValue)
 				Restacker.savedVariables.onTrade = (newValue)
+				if newValue then 
+					Restacker.SetEvents(TRADE)
+				else
+					Restacker.UnsetEvents(TRADE)
+				end
 			end,
 			width = "full"
 		},
 		[5] = {
 			type = "checkbox",
-			name = "On Taking Mail Attachments",
-			tooltip = "Restacking gets triggered when taking mail attachments",
+			name = "On Withdrawing Items from Guild Bank",
+			tooltip = "Restacking gets triggered when withdrawing items from guild bank",
 			getFunc = function() 
-				return Restacker.savedVariables.onMail
+				return Restacker.savedVariables.onGuildBank
 			end,
 			setFunc = function(newValue)
-				Restacker.savedVariables.onMail = (newValue)
+				Restacker.savedVariables.onGuildBank = (newValue)
+				if newValue then 
+					Restacker.SetEvents(GUILD_BANK)
+				else
+					Restacker.UnsetEvents(GUILD_BANK)
+				end
 			end,
 			width = "full"
 		},
@@ -215,7 +267,7 @@ function Restacker.CreateSettingsWindow()
 		[11] = {
 			type = "submenu",
 			name = "FCO ItemSaver",
-			tooltip = "Settings for FCO Item Saver addon",
+			tooltip = "Settings for FCO ItemSaver addon",
 			controls = {
 				[1] = {
 					type = "checkbox",
@@ -246,6 +298,22 @@ function Restacker.CreateSettingsWindow()
 					disabled = function() return not(FCOIsMarked) end,
 				}
 			}
+		},
+		[12] = {
+			type = "submenu",
+			name = "Item Saver",
+			tooltip = "Settings for Item Saver addon",
+			controls = {
+				[1] = {
+					type = "checkbox",
+					name = "Ignore saved items",
+					getFunc = function() return Restacker.savedVariables.itemSaverLock end,
+					setFunc = function(newValue)
+						Restacker.savedVariables.itemSaverLock = newValue
+					end,
+					disabled = function() return not(ItemSaver_IsItemSaved) end,
+				}
+			}
 		}
 	}
 
@@ -254,9 +322,22 @@ end
 
 function Restacker:Initialize()
 	Restacker.savedVariables = ZO_SavedVars:New("RestackerVars", 0.2, nil, Restacker.defaultSettings)
+	-- remove unneeded setting from savedVars (I like them clean)
+	Restacker.savedVariables.onMail = nil
 	Restacker.CreateSettingsWindow()
 
-	EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_OPEN_FENCE, Restacker.HookupListener)
+	if Restacker.savedVariables.onFence then
+		Restacker.SetEvents(FENCE)
+	end
+	
+	if Restacker.savedVariables.onTrade then
+		Restacker.SetEvents(TRADE)
+	end
+
+	if Restacker.savedVariables.onGuildBank then
+		Restacker.SetEvents(GUILD_BANK)
+	end
+	
 	EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_ADD_ON_LOADED)
 end
 
