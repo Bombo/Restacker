@@ -1,14 +1,15 @@
 Restacker = {}
 Restacker.name = "Restacker"
-Restacker.version = "0.5"
+Restacker.version = "0.6"
 
 local lam = LibStub:GetLibrary("LibAddonMenu-2.0")
-local FENCE, TRADE, GUILD_BANK = 1, 2, 3
+local FENCE, TRADE, GUILD_BANK, MAIL = 1, 2, 3, 4
 
 Restacker.defaultSettings = {
 	onFence = true,
 	onTrade = false,
 	onGuildBank = false,
+	onMail = false,
 	displayStackInfo = true,
 	fcoLock = false,
 	fcoSell = false,
@@ -141,6 +142,8 @@ function Restacker.SetEvents(type)
 		EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_TRADE_SUCCEEDED, Restacker.RestackBag)
 	elseif type == GUILD_BANK then
 		EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_CLOSE_GUILD_BANK, Restacker.RestackBag)
+	elseif type == MAIL then
+        EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_MAIL_TAKE_ATTACHED_ITEM_SUCCESS, Restacker.RestackBag)
 	end
 end
 
@@ -151,6 +154,8 @@ function Restacker.UnsetEvents(type)
 		EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_TRADE_SUCCEEDED)
 	elseif type == GUILD_BANK then
 		EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_CLOSE_GUILD_BANK)
+	elseif type == MAIL then
+        EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_MAIL_TAKE_ATTACHED_ITEM_SUCCESS)
 	end
 end
 
@@ -231,17 +236,34 @@ function Restacker.CreateSettingsWindow()
 			width = "full"
 		},
 		[6] = {
+			type = "checkbox",
+			name = "On Taking Mail Attachements",
+			tooltip = "Restacking gets triggered when taking stackable items from mails",
+			getFunc = function() 
+				return Restacker.savedVariables.onMail
+			end,
+			setFunc = function(newValue)
+				Restacker.savedVariables.onMail = (newValue)
+				if newValue then 
+					Restacker.SetEvents(MAIL)
+				else
+					Restacker.UnsetEvents(MAIL)
+				end
+			end,
+			width = "full"
+		},
+		[7] = {
 			type = "header",
 			name = "Output",
 			width = "full"
 		},
-		[7] = {
+		[8] = {
 			type = "description",
 			title = nil,
 			text = 'Tell restacker to shut up.',
 			width = "full"
 		},
-		[8] = {
+		[9] = {
 			type = "checkbox",
 			name = "Shut Up",
 			tooltip = "Hides the restacker chat output",
@@ -253,18 +275,18 @@ function Restacker.CreateSettingsWindow()
 			end,
 			width = "full"
 		},
-		[9] = {
+		[10] = {
 			type = "header",
 			name = "Other Addons Support",
 			width = "full"
 		},
-		[10] = {
+		[11] = {
 			type = "description",
 			title = nil,
 			text = 'Set how Restacker should behave in regards to other addons',
 			width = "full"
 		},
-		[11] = {
+		[12] = {
 			type = "submenu",
 			name = "FCO ItemSaver",
 			tooltip = "Settings for FCO ItemSaver addon",
@@ -299,7 +321,7 @@ function Restacker.CreateSettingsWindow()
 				}
 			}
 		},
-		[12] = {
+		[13] = {
 			type = "submenu",
 			name = "Item Saver",
 			tooltip = "Settings for Item Saver addon",
