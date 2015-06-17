@@ -1,6 +1,6 @@
 Restacker = {}
 Restacker.name = "Restacker"
-Restacker.version = "0.5"
+Restacker.version = "@project-version@"
 
 local lam = LibStub:GetLibrary("LibAddonMenu-2.0")
 local FENCE, TRADE, GUILD_BANK = 1, 2, 3
