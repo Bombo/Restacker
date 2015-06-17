@@ -14,7 +14,15 @@ Restacker.defaultSettings = {
 	fcoLock = false,
 	fcoSell = false,
 	fcoSellGuild = false,
-	itemSaverLock = false
+	itemSaverLock = false,
+	filterItSave = false,
+    filterItTradeHouse = false,
+    filterItTrade = false,
+    filterItVendor = false,
+    filterItMail = false,
+    filterItAlchemy = false,
+    filterItEnchant = false,
+    filterItProvision = false
 }
 
 local function getIcon(slot)
@@ -66,6 +74,25 @@ function Restacker.CheckItemSaverLock(bagSlot)
 	return false
 end
 
+function Restacker.CheckFilterItLocks(bagSlot)
+    if FilterIt then
+        local filter = PLAYER_INVENTORY.inventories[INVENTORY_BACKPACK].slots[bagSlot].FilterIt_CurrentFilter
+        if filter and filter ~= FILTERIT_NONE then
+            local result = (Restacker.savedVariables.filterItSave and filter == FILTERIT_ALL
+                or Restacker.savedVariables.filterItTradeHouse and filter == FILTERIT_TRADINGHOUSE
+                or Restacker.savedVariables.filterItTrade and filter == FILTERIT_TRADE
+                or Restacker.savedVariables.filterItVendor and filter == FILTERIT_VENDOR
+                or Restacker.savedVariables.filterItMail and filter == FILTERIT_MAIL
+                or Restacker.savedVariables.filterItAlchemy and filter == FILTERIT_ALCHEMY
+                or Restacker.savedVariables.filterItEnchant and filter == FILTERIT_ENCHANTING
+                or Restacker.savedVariables.filterItProvision and filter == FILTERIT_PROVISIONING)
+            d(filter)
+            d(result)
+            return result        
+        end
+    end
+end
+
 function Restacker.RestackBag()
 	local bagCache  = SHARED_INVENTORY:GenerateFullSlotData(nil, BAG_BACKPACK)
 	local stacks = {}
@@ -75,7 +102,7 @@ function Restacker.RestackBag()
 		local instanceId = GetItemInstanceId(BAG_BACKPACK, bagSlot)
 		local skip = false
 		
-		if not skip and stackSize ~= maxStackSize and not bagSlotData.stolen then
+		if not skip and stackSize ~= maxStackSize and not bagSlotData.stolen and not Restacker.CheckFilterItLocks(bagSlot) then
 			if stacks[instanceId] == nil and stackSize < maxStackSize then
 				stacks[instanceId] = {
 					slot = bagSlot,
@@ -334,6 +361,85 @@ function Restacker.CreateSettingsWindow()
 						Restacker.savedVariables.itemSaverLock = newValue
 					end,
 					disabled = function() return not(ItemSaver_IsItemSaved) end,
+				}
+			}
+		},
+		[14] = {
+			type = "submenu",
+			name = "FilterIt",
+			tooltip = "Settings for Circonians FilterIt addon",
+			controls = {
+				[1] = {
+					type = "checkbox",
+					name = "Ignore saved items",
+					getFunc = function() return Restacker.savedVariables.filterItSave end,
+					setFunc = function(newValue)
+						Restacker.savedVariables.filterItSave = newValue
+					end,
+					disabled = function() return not(FilterIt) end,
+				},
+				[2] = {
+					type = "checkbox",
+					name = "Ignore tradehouse items",
+					getFunc = function() return Restacker.savedVariables.filterItTradeHouse end,
+					setFunc = function(newValue)
+						Restacker.savedVariables.filterItTradeHouse = newValue
+					end,
+					disabled = function() return not(FilterIt) end,
+				},
+				[3] = {
+					type = "checkbox",
+					name = "Ignore trade items",
+					getFunc = function() return Restacker.savedVariables.filterItTrade end,
+					setFunc = function(newValue)
+						Restacker.savedVariables.filterItTrade = newValue
+					end,
+					disabled = function() return not(FilterIt) end,
+				},
+				[4] = {
+					type = "checkbox",
+					name = "Ignore vendor items",
+					getFunc = function() return Restacker.savedVariables.filterItVendor end,
+					setFunc = function(newValue)
+						Restacker.savedVariables.filterItVendor = newValue
+					end,
+					disabled = function() return not(FilterIt) end,
+				},
+				[5] = {
+					type = "checkbox",
+					name = "Ignore mail items",
+					getFunc = function() return Restacker.savedVariables.filterItMail end,
+					setFunc = function(newValue)
+						Restacker.savedVariables.filterItMail = newValue
+					end,
+					disabled = function() return not(FilterIt) end,
+				},
+				[6] = {
+					type = "checkbox",
+					name = "Ignore alchemy items",
+					getFunc = function() return Restacker.savedVariables.filterItAlchemy end,
+					setFunc = function(newValue)
+						Restacker.savedVariables.filterItAlchemy = newValue
+					end,
+					disabled = function() return not(FilterIt) end,
+				},
+				[7] = {
+					type = "checkbox",
+					name = "Ignore enchantment items",
+					getFunc = function() return Restacker.savedVariables.filterItEnchant end,
+					setFunc = function(newValue)
+						Restacker.savedVariables.filterItEnchant = newValue
+					end,
+					disabled = function() return not(FilterIt) end,
+				},
+				[8] = {
+					type = "checkbox",
+					name = "Ignore provisioning items",
+					getFunc = function() return Restacker.savedVariables.filterItProvision end,
+					setFunc = function(newValue)
+						Restacker.savedVariables.filterItProvision = newValue
+					end,
+					disabled = function() return not(FilterIt) end,
 				}
 			}
 		}
