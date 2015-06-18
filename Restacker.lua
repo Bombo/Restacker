@@ -107,8 +107,15 @@ function Restacker.RestackBag()
     for bagSlot, bagSlotData in pairs(bagCache) do
         local stackSize, maxStackSize = GetSlotStackSize(BAG_BACKPACK, bagSlot)
         local instanceId = GetItemInstanceId(BAG_BACKPACK, bagSlot)
+		local stackId = instanceId
+		
+		if bagSlotData.stolen then
+			stackId = stackId .. 1
+		else
+			stackId = stackId .. 0
+		end
         
-        if stackSize ~= maxStackSize and not bagSlotData.stolen then
+        if stackSize ~= maxStackSize then
             if Restacker.CheckFilterItLocks(bagSlot) then
                 local slotData = { slot = bagSlot, stackSize = stackSize }
                 if filterItStacks[instanceId] then
@@ -117,8 +124,8 @@ function Restacker.RestackBag()
                 else
                     filterItStacks[instanceId] = { slotData }
                 end
-            elseif stacks[instanceId] == nil and stackSize < maxStackSize then
-                stacks[instanceId] = {
+            elseif stacks[stackId] == nil and stackSize < maxStackSize then
+                stacks[stackId] = {
                     slot = bagSlot,
                     data = bagSlotData,
                     stackSize = stackSize,
@@ -126,25 +133,25 @@ function Restacker.RestackBag()
                     itemSaverLocked = Restacker.CheckItemSaverLock(bagSlot)
                 }
                 if filterItStacks[instanceId] then
-                    Restacker.CreateFilterItOutput(filterItStacks[instanceId], stacks[instanceId])
+                    Restacker.CreateFilterItOutput(filterItStacks[instanceId], stacks[stackId])
                 end
             else
                 if filterItStacks[instanceId] then
-                    Restacker.CreateFilterItOutput(filterItStacks[instanceId], stacks[instanceId])
+                    Restacker.CreateFilterItOutput(filterItStacks[instanceId], stacks[stackId])
                 end
-                local toSlot = stacks[instanceId].slot
-                local toStackSize = stacks[instanceId].stackSize
-                if stacks[instanceId].fcoLocked then
+                local toSlot = stacks[stackId].slot
+                local toStackSize = stacks[stackId].stackSize
+                if stacks[stackId].fcoLocked then
                     if Restacker.savedVariables.displayStackInfo then
                         displaySkipMessage(toSlot, stackSize, toStackSize, 'FCO ItemSaver')
                     end
-                elseif stacks[instanceId].itemSaverLocked then
+                elseif stacks[stackId].itemSaverLocked then
                     if Restacker.savedVariables.displayStackInfo then
                         displaySkipMessage(toSlot, stackSize, toStackSize, 'Item Saver')
                     end
                 else
-                    local toSlot = stacks[instanceId].slot
-                    local toStackSize = stacks[instanceId].stackSize
+                    local toSlot = stacks[stackId].slot
+                    local toStackSize = stacks[stackId].stackSize
                     local quantity = zo_min(stackSize, maxStackSize - toStackSize)
                     if IsProtectedFunction("RequestMoveItem") then
                         CallSecureProtected("RequestMoveItem", BAG_BACKPACK, bagSlot, BAG_BACKPACK, toSlot, quantity)
@@ -154,9 +161,9 @@ function Restacker.RestackBag()
                     
                     local stackFilled = toStackSize + quantity == maxStackSize
                     if stackFilled then
-                        stacks[instanceId] = nil
+                        stacks[stackId] = nil
                     else
-                        stacks[instanceId].stackSize = toStackSize + quantity
+                        stacks[stackId].stackSize = toStackSize + quantity
                     end
                     
                     if Restacker.savedVariables.displayStackInfo then
