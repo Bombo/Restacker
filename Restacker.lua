@@ -484,6 +484,10 @@ function Restacker.CreateSettingsWindow()
 end
 
 local function handleKeybindStrip()
+	local inventoryScene = ZO_Scene:New("inventory", SCENE_MANAGER)
+	inventoryScene:RegisterCallback("StateChange", function(oldState, newState)
+		-- d(newState)
+	end)
 	-- local bar = INVENTORY_MENU_BAR.modeBar:Add(SI_INVENTORY_MODE_INVENTORY, { INVENTORY_FRAGMENT, BACKPACK_MENU_BAR_LAYOUT_FRAGMENT }, {}, myButtonGroup)
 end
 
