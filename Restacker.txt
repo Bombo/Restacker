@@ -1,7 +1,7 @@
 ## Title: Restacker
 ## Description: Simple restacking addon, keeping your inventory organized after laundering or trading items, or withdrawing items from the guild bank.
 ## APIVersion: 100011
-## OptionalDependsOn: LibAddonMenu-2.0 ItemSaver FCOItemSaver
+## OptionalDependsOn: LibAddonMenu-2.0 ItemSaver FCOItemSaver FilterIt
 ## SavedVariables: RestackerVars
  
 libs\LibStub\LibStub.lua
