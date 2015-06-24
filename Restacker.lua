@@ -5,6 +5,14 @@ Restacker.version = "0.6"
 local lam = LibStub:GetLibrary("LibAddonMenu-2.0")
 local FENCE, TRADE, GUILD_BANK, MAIL = 1, 2, 3, 4
 
+local myButtonGroup = {
+	{
+		name = "Restack",
+		keybind = "RESTACKER_RESTACK_BAG"
+	},
+	alignment = KEYBIND_STRIP_ALIGN_RIGHT,
+}
+
 Restacker.defaultSettings = {
     onFence = true,
     onTrade = false,
@@ -475,6 +483,10 @@ function Restacker.CreateSettingsWindow()
     lam:RegisterOptionControls("Restacker_SETTINGS", optionsTable)
 end
 
+local function handleKeybindStrip()
+	-- local bar = INVENTORY_MENU_BAR.modeBar:Add(SI_INVENTORY_MODE_INVENTORY, { INVENTORY_FRAGMENT, BACKPACK_MENU_BAR_LAYOUT_FRAGMENT }, {}, myButtonGroup)
+end
+
 function Restacker:Initialize()
     Restacker.savedVariables = ZO_SavedVars:New("RestackerVars", 0.2, nil, Restacker.defaultSettings)
     Restacker.CreateSettingsWindow()
@@ -495,9 +507,11 @@ function Restacker:Initialize()
         Restacker.SetEvents(MAIL)
     end
 
-	handleKeyBindStrip()
+	handleKeybindStrip()
     
     EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_ADD_ON_LOADED)
+	
+	ZO_CreateStringId("SI_BINDING_NAME_RESTACKER_RESTACK_BAG", "Restack Bag")
 end
 
 SLASH_COMMANDS["/restack"] = Restacker.RestackBag

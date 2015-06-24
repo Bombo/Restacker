@@ -20,4 +20,5 @@ libs\LibAddonMenu-2.0\controls\header.lua
 libs\LibAddonMenu-2.0\controls\slider.lua
 libs\LibAddonMenu-2.0\controls\texture.lua
 
+bindings.xml
 Restacker.lua
