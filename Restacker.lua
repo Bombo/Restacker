@@ -477,8 +477,6 @@ end
 
 function Restacker:Initialize()
     Restacker.savedVariables = ZO_SavedVars:New("RestackerVars", 0.2, nil, Restacker.defaultSettings)
-    -- remove unneeded setting from savedVars (I like them clean)
-    Restacker.savedVariables.onMail = nil
     Restacker.CreateSettingsWindow()
 
     if Restacker.savedVariables.onFence then
@@ -492,6 +490,12 @@ function Restacker:Initialize()
     if Restacker.savedVariables.onGuildBank then
         Restacker.SetEvents(GUILD_BANK)
     end
+	
+    if Restacker.savedVariables.onMail then
+        Restacker.SetEvents(MAIL)
+    end
+
+	handleKeyBindStrip()
     
     EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_ADD_ON_LOADED)
 end
