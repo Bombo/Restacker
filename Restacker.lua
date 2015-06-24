@@ -8,7 +8,8 @@ local FENCE, TRADE, GUILD_BANK, MAIL = 1, 2, 3, 4
 local myButtonGroup = {
 	{
 		name = "Restack",
-		keybind = "RESTACKER_RESTACK_BAG"
+		keybind = "RESTACKER_RESTACK_BAG",
+		callback = function() Restacker.RestackBag() end
 	},
 	alignment = KEYBIND_STRIP_ALIGN_RIGHT,
 }
@@ -484,11 +485,16 @@ function Restacker.CreateSettingsWindow()
 end
 
 local function handleKeybindStrip()
-	local inventoryScene = ZO_Scene:New("inventory", SCENE_MANAGER)
+	local inventoryScene = SCENE_MANAGER:GetScene("inventory")
 	inventoryScene:RegisterCallback("StateChange", function(oldState, newState)
-		-- d(newState)
+		zo_callLater(function () 
+			if newState == SCENE_SHOWN then
+				KEYBIND_STRIP:AddKeybindButtonGroup(myButtonGroup)
+			elseif newState == SCENE_HIDDEN then
+				KEYBIND_STRIP:RemoveKeybindButtonGroup(myButtonGroup)
+			end
+		end, 100)
 	end)
-	-- local bar = INVENTORY_MENU_BAR.modeBar:Add(SI_INVENTORY_MODE_INVENTORY, { INVENTORY_FRAGMENT, BACKPACK_MENU_BAR_LAYOUT_FRAGMENT }, {}, myButtonGroup)
 end
 
 function Restacker:Initialize()
