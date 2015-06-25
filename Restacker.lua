@@ -1,17 +1,19 @@
 Restacker = {}
 Restacker.name = "Restacker"
-Restacker.version = "0.6"
+Restacker.version = "0.6.1"
 
 local lam = LibStub:GetLibrary("LibAddonMenu-2.0")
 local FENCE, TRADE, GUILD_BANK, MAIL = 1, 2, 3, 4
 
+local restackButton = {
+	name = "Restack Bag",
+	keybind = "RESTACKER_RESTACK_BAG",
+	callback = function() Restacker.RestackBag() end
+}
+
 local myButtonGroup = {
-	{
-		name = "Restack",
-		keybind = "RESTACKER_RESTACK_BAG",
-		callback = function() Restacker.RestackBag() end
-	},
-	alignment = KEYBIND_STRIP_ALIGN_RIGHT,
+	restackButton,
+	alignment = KEYBIND_STRIP_ALIGN_CENTER,
 }
 
 Restacker.defaultSettings = {
@@ -495,6 +497,9 @@ local function handleKeybindStrip()
 			end
 		end, 100)
 	end)
+	
+	table.insert(PLAYER_INVENTORY.bankDepositTabKeybindButtonGroup, restackButton)
+	KEYBIND_STRIP:UpdateKeybindButtonGroup(PLAYER_INVENTORY.bankDepositTabKeybindButtonGroup)
 end
 
 function Restacker:Initialize()
