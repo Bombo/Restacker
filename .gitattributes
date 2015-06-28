@@ -1,2 +1,4 @@
-.idea/ export-ignore
+.idea/			export-ignore
+Restacker.iml	export-ignore
+.gitattributes	export-ignore
 # etc.
