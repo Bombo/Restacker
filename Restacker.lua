@@ -16,7 +16,7 @@ local myButtonGroup = {
 	alignment = KEYBIND_STRIP_ALIGN_CENTER,
 }
 
-Restacker.defaultSettings = {
+local defaultSettings = {
     onFence = true,
     onTrade = false,
     onGuildBank = false,
@@ -36,6 +36,8 @@ Restacker.defaultSettings = {
     filterItProvision = false
 }
 
+local savedVariables
+
 local function getIcon(slot)
     local icon = GetItemInfo(BAG_BACKPACK, slot)
     if icon == nil then 
@@ -52,7 +54,7 @@ local function displaySkipMessage(slot, fromStackSize, toStackSize, reason)
     d(output)
 end
 
-function Restacker.DisplayStackResult(fromSlot, toSlot, fromStackSize, toStackSize, quantity)
+local function displayStackResult(fromSlot, toSlot, fromStackSize, toStackSize, quantity)
     local itemLink = GetItemLink(BAG_BACKPACK, toSlot, LINK_STYLE_DEFAULT)
     local toStackSizeAfter = toStackSize + quantity
     local output = zo_strformat('Restacked <<5>><<t:1>>: [<<2>>][<<3>>] -> [<<4>>]', itemLink, toStackSize, fromStackSize, toStackSizeAfter, getIcon(toSlot))
@@ -63,48 +65,48 @@ function Restacker.DisplayStackResult(fromSlot, toSlot, fromStackSize, toStackSi
     d(output)
 end
 
-function Restacker.CheckFCOLocks(instanceId)
+local function checkFCOLocks(instanceId)
     if (FCOIsMarked 
-            and (Restacker.savedVariables.fcoLock
-                or Restacker.savedVariables.fcoSell
-                or Restacker.savedVariables.fcoSellGuild
+            and (savedVariables.fcoLock
+                or savedVariables.fcoSell
+                or savedVariables.fcoSellGuild
             )
         ) then
         local _, flags = FCOIsMarked(instanceId, -1)
-        return (Restacker.savedVariables.fcoLock and flags[1]) 
-            or (Restacker.savedVariables.fcoSell and flags[5])
-            or (Restacker.savedVariables.fcoSellGuild and flags[11])
+        return (savedVariables.fcoLock and flags[1])
+            or (savedVariables.fcoSell and flags[5])
+            or (savedVariables.fcoSellGuild and flags[11])
     end
     return false
 end
 
-function Restacker.CheckItemSaverLock(bagSlot)
-    if (ItemSaver_IsItemSaved and Restacker.savedVariables.itemSaverLock) then
+local function checkItemSaverLock(bagSlot)
+    if (ItemSaver_IsItemSaved and savedVariables.itemSaverLock) then
         return ItemSaver_IsItemSaved(BAG_BACKPACK, bagSlot)
     end
     return false
 end
 
-function Restacker.CheckFilterItLocks(bagSlot)
+local function checkFilterItLocks(bagSlot)
     if FilterIt then
         local filter = PLAYER_INVENTORY.inventories[INVENTORY_BACKPACK].slots[bagSlot].FilterIt_CurrentFilter
         if filter and filter ~= FILTERIT_NONE then
-            local result = (Restacker.savedVariables.filterItSave and filter == FILTERIT_ALL
-                or Restacker.savedVariables.filterItTradeHouse and filter == FILTERIT_TRADINGHOUSE
-                or Restacker.savedVariables.filterItTrade and filter == FILTERIT_TRADE
-                or Restacker.savedVariables.filterItVendor and filter == FILTERIT_VENDOR
-                or Restacker.savedVariables.filterItMail and filter == FILTERIT_MAIL
-                or Restacker.savedVariables.filterItAlchemy and filter == FILTERIT_ALCHEMY
-                or Restacker.savedVariables.filterItEnchant and filter == FILTERIT_ENCHANTING
-                or Restacker.savedVariables.filterItProvision and filter == FILTERIT_PROVISIONING)
+            local result = (savedVariables.filterItSave and filter == FILTERIT_ALL
+                or savedVariables.filterItTradeHouse and filter == FILTERIT_TRADINGHOUSE
+                or savedVariables.filterItTrade and filter == FILTERIT_TRADE
+                or savedVariables.filterItVendor and filter == FILTERIT_VENDOR
+                or savedVariables.filterItMail and filter == FILTERIT_MAIL
+                or savedVariables.filterItAlchemy and filter == FILTERIT_ALCHEMY
+                or savedVariables.filterItEnchant and filter == FILTERIT_ENCHANTING
+                or savedVariables.filterItProvision and filter == FILTERIT_PROVISIONING)
             return result        
         end
     end
 end
 
-function Restacker.CreateFilterItOutput(filterItStack, slotData)
+local function createFilterItOutput(filterItStack, slotData)
     for _, element in ipairs(filterItStack) do
-        if Restacker.savedVariables.displayStackInfo then
+        if savedVariables.displayStackInfo then
             displaySkipMessage(element.slot, slotData.stackSize, element.stackSize, 'FilterIt')
         end
     end
@@ -127,10 +129,10 @@ function Restacker.RestackBag()
 		end
         
         if stackSize ~= maxStackSize then
-            if Restacker.CheckFilterItLocks(bagSlot) then
+            if checkFilterItLocks(bagSlot) then
                 local slotData = { slot = bagSlot, stackSize = stackSize }
                 if filterItStacks[instanceId] then
-                    Restacker.CreateFilterItOutput(filterItStacks[instanceId], slotData)
+                    createFilterItOutput(filterItStacks[instanceId], slotData)
                     table.insert(filterItStacks[instanceId], slotData)
                 else
                     filterItStacks[instanceId] = { slotData }
@@ -140,24 +142,24 @@ function Restacker.RestackBag()
                     slot = bagSlot,
                     data = bagSlotData,
                     stackSize = stackSize,
-                    fcoLocked = Restacker.CheckFCOLocks(instanceId),
-                    itemSaverLocked = Restacker.CheckItemSaverLock(bagSlot)
+                    fcoLocked = checkFCOLocks(instanceId),
+                    itemSaverLocked = checkItemSaverLock(bagSlot)
                 }
                 if filterItStacks[instanceId] then
-                    Restacker.CreateFilterItOutput(filterItStacks[instanceId], stacks[stackId])
+                    createFilterItOutput(filterItStacks[instanceId], stacks[stackId])
                 end
             else
                 if filterItStacks[instanceId] then
-                    Restacker.CreateFilterItOutput(filterItStacks[instanceId], stacks[stackId])
+                    createFilterItOutput(filterItStacks[instanceId], stacks[stackId])
                 end
                 local toSlot = stacks[stackId].slot
                 local toStackSize = stacks[stackId].stackSize
                 if stacks[stackId].fcoLocked then
-                    if Restacker.savedVariables.displayStackInfo then
+                    if savedVariables.displayStackInfo then
                         displaySkipMessage(toSlot, stackSize, toStackSize, 'FCO ItemSaver')
                     end
                 elseif stacks[stackId].itemSaverLocked then
-                    if Restacker.savedVariables.displayStackInfo then
+                    if savedVariables.displayStackInfo then
                         displaySkipMessage(toSlot, stackSize, toStackSize, 'Item Saver')
                     end
                 else
@@ -177,8 +179,8 @@ function Restacker.RestackBag()
                         stacks[stackId].stackSize = toStackSize + quantity
                     end
                     
-                    if Restacker.savedVariables.displayStackInfo then
-                        Restacker.DisplayStackResult(bagSlot, toSlot, stackSize, toStackSize, quantity)
+                    if savedVariables.displayStackInfo then
+                        displayStackResult(bagSlot, toSlot, stackSize, toStackSize, quantity)
                     end
                 end
             end
@@ -186,23 +188,23 @@ function Restacker.RestackBag()
     end
 end
 
-function Restacker.StackAndUnhook()
+local function stackAndUnhook()
     Restacker.RestackBag()
     EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_CLOSE_STORE)
     EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_CLOSE_FENCE)
 end
 
-function Restacker.OnFence()
+local function onFence()
     --[[ as EVENT_CLOSE_FENCE doesn't seem to work at the moment, we hook up for both
          that event and the currently firing EVENT_CLOSE_STORE.
     --]]
-    EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_CLOSE_STORE, Restacker.StackAndUnhook)
-    EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_CLOSE_FENCE, Restacker.StackAndUnhook)
+    EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_CLOSE_STORE, stackAndUnhook)
+    EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_CLOSE_FENCE, stackAndUnhook)
 end
 
-function Restacker.SetEvents(type)
+local function setEvents(type)
     if type == FENCE then
-        EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_OPEN_FENCE, Restacker.OnFence)
+        EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_OPEN_FENCE, onFence)
     elseif type == TRADE then
         EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_TRADE_SUCCEEDED, Restacker.RestackBag)
     elseif type == GUILD_BANK then
@@ -212,7 +214,7 @@ function Restacker.SetEvents(type)
     end
 end
 
-function Restacker.UnsetEvents(type)
+local function unsetEvents(type)
     if type == FENCE then
         EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_OPEN_FENCE)
     elseif type == TRADE then
@@ -222,11 +224,6 @@ function Restacker.UnsetEvents(type)
     elseif type == MAIL then
         EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_MAIL_TAKE_ATTACHED_ITEM_SUCCESS)
     end
-end
-
-function Restacker.OnAddOnLoaded(event, addonName)
-    if addonName ~= Restacker.name then return end
-    Restacker:Initialize()
 end
 
 function Restacker.CreateSettingsWindow()
@@ -254,14 +251,14 @@ function Restacker.CreateSettingsWindow()
             name = "On Laundering Items",
             tooltip = "Restacking gets triggered when leaving a fence",
             getFunc = function() 
-                return Restacker.savedVariables.onFence
+                return savedVariables.onFence
             end,
             setFunc = function(newValue)
-                Restacker.savedVariables.onFence = (newValue)
+                savedVariables.onFence = (newValue)
                 if newValue then 
-                    Restacker.SetEvents(FENCE)
+                    setEvents(FENCE)
                 else 
-                    Restacker.UnsetEvents(FENCE)
+                    unsetEvents(FENCE)
                 end
             end,
             width = "full"
@@ -271,14 +268,14 @@ function Restacker.CreateSettingsWindow()
             name = "On Trading Items",
             tooltip = "Restacking gets triggered when successfully trading with another player",
             getFunc = function() 
-                return Restacker.savedVariables.onTrade
+                return savedVariables.onTrade
             end,
             setFunc = function(newValue)
-                Restacker.savedVariables.onTrade = (newValue)
+                savedVariables.onTrade = (newValue)
                 if newValue then 
-                    Restacker.SetEvents(TRADE)
+                    setEvents(TRADE)
                 else
-                    Restacker.UnsetEvents(TRADE)
+                    unsetEvents(TRADE)
                 end
             end,
             width = "full"
@@ -288,14 +285,14 @@ function Restacker.CreateSettingsWindow()
             name = "On Withdrawing Items from Guild Bank",
             tooltip = "Restacking gets triggered when withdrawing items from guild bank",
             getFunc = function() 
-                return Restacker.savedVariables.onGuildBank
+                return savedVariables.onGuildBank
             end,
             setFunc = function(newValue)
-                Restacker.savedVariables.onGuildBank = (newValue)
+                savedVariables.onGuildBank = (newValue)
                 if newValue then 
-                    Restacker.SetEvents(GUILD_BANK)
+                    setEvents(GUILD_BANK)
                 else
-                    Restacker.UnsetEvents(GUILD_BANK)
+                    unsetEvents(GUILD_BANK)
                 end
             end,
             width = "full"
@@ -305,14 +302,14 @@ function Restacker.CreateSettingsWindow()
             name = "On Taking Mail Attachements",
             tooltip = "Restacking gets triggered when taking stackable items from mails",
             getFunc = function() 
-                return Restacker.savedVariables.onMail
+                return savedVariables.onMail
             end,
             setFunc = function(newValue)
-                Restacker.savedVariables.onMail = (newValue)
+                savedVariables.onMail = (newValue)
                 if newValue then 
-                    Restacker.SetEvents(MAIL)
+                    setEvents(MAIL)
                 else
-                    Restacker.UnsetEvents(MAIL)
+                    unsetEvents(MAIL)
                 end
             end,
             width = "full"
@@ -333,10 +330,10 @@ function Restacker.CreateSettingsWindow()
             name = "Shut Up",
             tooltip = "Hides the restacker chat output",
             getFunc = function() 
-                return not Restacker.savedVariables.displayStackInfo
+                return not savedVariables.displayStackInfo
             end,
             setFunc = function(newValue)
-                Restacker.savedVariables.displayStackInfo = (not newValue)
+                savedVariables.displayStackInfo = (not newValue)
             end,
             width = "full"
         },
@@ -359,18 +356,18 @@ function Restacker.CreateSettingsWindow()
                 [1] = {
                     type = "checkbox",
                     name = "Ignore locked items",
-                    getFunc = function() return Restacker.savedVariables.fcoLock end,
+                    getFunc = function() return savedVariables.fcoLock end,
                     setFunc = function(newValue)
-                        Restacker.savedVariables.fcoLock = newValue
+                        savedVariables.fcoLock = newValue
                     end,
                     disabled = function() return not(FCOIsMarked) end,
                 },
                 [2] = {
                     type = "checkbox",
                     name = "Ignore items marked for selling",
-                    getFunc = function() return Restacker.savedVariables.fcoSell end,
+                    getFunc = function() return savedVariables.fcoSell end,
                     setFunc = function(newValue)
-                        Restacker.savedVariables.fcoSell = newValue
+                        savedVariables.fcoSell = newValue
                     end,
                     disabled = function() return not(FCOIsMarked) end,
                 },
@@ -378,9 +375,9 @@ function Restacker.CreateSettingsWindow()
                     type = "checkbox",
                     name = "Ignore items marked for selling at guild store",
                     tooltip = "Ignore items marked for selling at guild store",
-                    getFunc = function() return Restacker.savedVariables.fcoSellGuild end,
+                    getFunc = function() return savedVariables.fcoSellGuild end,
                     setFunc = function(newValue)
-                        Restacker.savedVariables.fcoSellGuild = newValue
+                        savedVariables.fcoSellGuild = newValue
                     end,
                     disabled = function() return not(FCOIsMarked) end,
                 }
@@ -394,9 +391,9 @@ function Restacker.CreateSettingsWindow()
                 [1] = {
                     type = "checkbox",
                     name = "Ignore saved items",
-                    getFunc = function() return Restacker.savedVariables.itemSaverLock end,
+                    getFunc = function() return savedVariables.itemSaverLock end,
                     setFunc = function(newValue)
-                        Restacker.savedVariables.itemSaverLock = newValue
+                        savedVariables.itemSaverLock = newValue
                     end,
                     disabled = function() return not(ItemSaver_IsItemSaved) end,
                 }
@@ -410,72 +407,72 @@ function Restacker.CreateSettingsWindow()
                 [1] = {
                     type = "checkbox",
                     name = "Ignore saved items",
-                    getFunc = function() return Restacker.savedVariables.filterItSave end,
+                    getFunc = function() return savedVariables.filterItSave end,
                     setFunc = function(newValue)
-                        Restacker.savedVariables.filterItSave = newValue
+                        savedVariables.filterItSave = newValue
                     end,
                     disabled = function() return not(FilterIt) end,
                 },
                 [2] = {
                     type = "checkbox",
                     name = "Ignore tradehouse items",
-                    getFunc = function() return Restacker.savedVariables.filterItTradeHouse end,
+                    getFunc = function() return savedVariables.filterItTradeHouse end,
                     setFunc = function(newValue)
-                        Restacker.savedVariables.filterItTradeHouse = newValue
+                        savedVariables.filterItTradeHouse = newValue
                     end,
                     disabled = function() return not(FilterIt) end,
                 },
                 [3] = {
                     type = "checkbox",
                     name = "Ignore trade items",
-                    getFunc = function() return Restacker.savedVariables.filterItTrade end,
+                    getFunc = function() return savedVariables.filterItTrade end,
                     setFunc = function(newValue)
-                        Restacker.savedVariables.filterItTrade = newValue
+                        savedVariables.filterItTrade = newValue
                     end,
                     disabled = function() return not(FilterIt) end,
                 },
                 [4] = {
                     type = "checkbox",
                     name = "Ignore vendor items",
-                    getFunc = function() return Restacker.savedVariables.filterItVendor end,
+                    getFunc = function() return savedVariables.filterItVendor end,
                     setFunc = function(newValue)
-                        Restacker.savedVariables.filterItVendor = newValue
+                        savedVariables.filterItVendor = newValue
                     end,
                     disabled = function() return not(FilterIt) end,
                 },
                 [5] = {
                     type = "checkbox",
                     name = "Ignore mail items",
-                    getFunc = function() return Restacker.savedVariables.filterItMail end,
+                    getFunc = function() return savedVariables.filterItMail end,
                     setFunc = function(newValue)
-                        Restacker.savedVariables.filterItMail = newValue
+                        savedVariables.filterItMail = newValue
                     end,
                     disabled = function() return not(FilterIt) end,
                 },
                 [6] = {
                     type = "checkbox",
                     name = "Ignore alchemy items",
-                    getFunc = function() return Restacker.savedVariables.filterItAlchemy end,
+                    getFunc = function() return savedVariables.filterItAlchemy end,
                     setFunc = function(newValue)
-                        Restacker.savedVariables.filterItAlchemy = newValue
+                        savedVariables.filterItAlchemy = newValue
                     end,
                     disabled = function() return not(FilterIt) end,
                 },
                 [7] = {
                     type = "checkbox",
                     name = "Ignore enchantment items",
-                    getFunc = function() return Restacker.savedVariables.filterItEnchant end,
+                    getFunc = function() return savedVariables.filterItEnchant end,
                     setFunc = function(newValue)
-                        Restacker.savedVariables.filterItEnchant = newValue
+                        savedVariables.filterItEnchant = newValue
                     end,
                     disabled = function() return not(FilterIt) end,
                 },
                 [8] = {
                     type = "checkbox",
                     name = "Ignore provisioning items",
-                    getFunc = function() return Restacker.savedVariables.filterItProvision end,
+                    getFunc = function() return savedVariables.filterItProvision end,
                     setFunc = function(newValue)
-                        Restacker.savedVariables.filterItProvision = newValue
+                        savedVariables.filterItProvision = newValue
                     end,
                     disabled = function() return not(FilterIt) end,
                 }
@@ -502,24 +499,24 @@ local function handleKeybindStrip()
 	KEYBIND_STRIP:UpdateKeybindButtonGroup(PLAYER_INVENTORY.bankDepositTabKeybindButtonGroup)
 end
 
-function Restacker:Initialize()
-    Restacker.savedVariables = ZO_SavedVars:New("RestackerVars", 0.2, nil, Restacker.defaultSettings)
+local function initialize()
+    savedVariables = ZO_SavedVars:New("RestackerVars", 0.2, nil, defaultSettings)
     Restacker.CreateSettingsWindow()
 
-    if Restacker.savedVariables.onFence then
-        Restacker.SetEvents(FENCE)
+    if savedVariables.onFence then
+        setEvents(FENCE)
     end
     
-    if Restacker.savedVariables.onTrade then
-        Restacker.SetEvents(TRADE)
+    if savedVariables.onTrade then
+        setEvents(TRADE)
     end
 
-    if Restacker.savedVariables.onGuildBank then
-        Restacker.SetEvents(GUILD_BANK)
+    if savedVariables.onGuildBank then
+        setEvents(GUILD_BANK)
     end
 	
-    if Restacker.savedVariables.onMail then
-        Restacker.SetEvents(MAIL)
+    if savedVariables.onMail then
+        setEvents(MAIL)
     end
 
 	handleKeybindStrip()
@@ -529,6 +526,11 @@ function Restacker:Initialize()
 	ZO_CreateStringId("SI_BINDING_NAME_RESTACKER_RESTACK_BAG", "Restack Bag")
 end
 
+local function onAddOnLoaded(_, addonName)
+    if addonName ~= Restacker.name then return end
+    initialize()
+end
+
 SLASH_COMMANDS["/restack"] = Restacker.RestackBag
 
-EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_ADD_ON_LOADED, Restacker.OnAddOnLoaded)
+EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_ADD_ON_LOADED, onAddOnLoaded)
