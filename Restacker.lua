@@ -1,15 +1,4 @@
-local FENCE, TRADE, GUILD_BANK, MAIL = 1, 2, 3, 4
-
-local restackButton = {
-  name = "Restack Bag",
-  keybind = "RESTACKER_RESTACK_BAG",
-  callback = function() Restacker.RestackBag() end
-}
-
-local myButtonGroup = {
-  restackButton,
-  alignment = KEYBIND_STRIP_ALIGN_CENTER,
-}
+local FENCE, TRADE, GUILD_BANK, MAIL = Restacker.FENCE, Restacker.TRADE, Restacker.GUILD_BANK, Restacker.MAIL
 
 local defaultSettings = {
   onFence = true,
@@ -105,7 +94,7 @@ local function createFilterItOutput(filterItStack, slotData)
   end
 end
 
-function Restacker.RestackBag()
+local function restackBag()
   local bagCache = SHARED_INVENTORY:GenerateFullSlotData(nil, BAG_BACKPACK)
   local stacks = {}
   local filterItStacks = {}
@@ -182,7 +171,7 @@ function Restacker.RestackBag()
 end
 
 local function stackAndUnhook()
-  Restacker.RestackBag()
+  restackBag()
   EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_CLOSE_STORE)
   EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_CLOSE_FENCE)
 end
@@ -199,15 +188,13 @@ local function setEvents(type)
   if type == FENCE then
     EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_OPEN_FENCE, onFence)
   elseif type == TRADE then
-    EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_TRADE_SUCCEEDED, Restacker.RestackBag)
+    EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_TRADE_SUCCEEDED, restackBag)
   elseif type == GUILD_BANK then
-    EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_CLOSE_GUILD_BANK, Restacker.RestackBag)
+    EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_CLOSE_GUILD_BANK, restackBag)
   elseif type == MAIL then
-    EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_MAIL_TAKE_ATTACHED_ITEM_SUCCESS, Restacker.RestackBag)
+    EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_MAIL_TAKE_ATTACHED_ITEM_SUCCESS, restackBag)
   end
 end
-
-Restacker.setEvents = setEvents
 
 local function unsetEvents(type)
   if type == FENCE then
@@ -221,7 +208,16 @@ local function unsetEvents(type)
   end
 end
 
-Restacker.unsetEvents = unsetEvents
+local restackButton = {
+  name = "Restack Bag",
+  keybind = "RESTACKER_RESTACK_BAG",
+  callback = function() restackBag() end
+}
+
+local myButtonGroup = {
+  restackButton,
+  alignment = KEYBIND_STRIP_ALIGN_CENTER,
+}
 
 local function handleKeybindStrip()
   local inventoryScene = SCENE_MANAGER:GetScene("inventory")
@@ -243,7 +239,7 @@ local function initialize()
   savedVariables = ZO_SavedVars:New("RestackerVars", 0.2, nil, defaultSettings)
   Restacker.savedVariables = savedVariables
 
-  Restacker.CreateSettingsWindow()
+  Restacker.createSettingsWindow()
 
   if savedVariables.onFence then
     setEvents(FENCE)
@@ -273,6 +269,12 @@ local function onAddOnLoaded(_, addonName)
   initialize()
 end
 
-SLASH_COMMANDS["/restack"] = Restacker.RestackBag
+-- globals
+Restacker.setEvents = setEvents
+Restacker.unsetEvents = unsetEvents
 
+-- create slash command
+SLASH_COMMANDS["/restack"] = restackBag
+
+-- register addon load
 EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_ADD_ON_LOADED, onAddOnLoaded)

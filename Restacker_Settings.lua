@@ -2,10 +2,30 @@ local lam = LibStub:GetLibrary("LibAddonMenu-2.0")
 local optionsTable = {}
 local index = 0
 local savedVariables
+local setEvents, unsetEvents
+local FENCE, TRADE, GUILD_BANK, MAIL = Restacker.FENCE, Restacker.TRADE, Restacker.GUILD_BANK, Restacker.MAIL
+
+local FCOIsMarked = FCOIsMarked
+local ItemSaver_IsItemSaved = ItemSaver_IsItemSaved
+local FilterIt = FilterIt
+
+local function registerLocals()
+  savedVariables = Restacker.savedVariables
+  setEvents = Restacker.setEvents
+  unsetEvents = Restacker.unsetEvents
+end
 
 local function addField(field)
   index = index + 1
   optionsTable[index] = field
+end
+
+local function createHeaderData(name)
+  return {
+    type = "header",
+    name = name,
+    width = "full"
+  }
 end
 
 local function createDescriptionData(text)
@@ -17,40 +37,123 @@ local function createDescriptionData(text)
   }
 end
 
-local function createCheckboxData(name, tooltip, getFunc, setFunc)
+local function createCheckboxData(name, tooltip, callbacks, disabled)
   return {
     type = "checkbox",
     name = name,
     tooltip = tooltip,
-    getFunc = getFunc,
-    setFunc = setFunc,
-    width = "full"
+    getFunc = callbacks.getFunc,
+    setFunc = callbacks.setFunc,
+    width = "full",
+    disabled = disabled
+  }
+end
+
+local function createEventCallbacks(savedVarName, eventConstant)
+  return {
+    getFunc = function()
+      return savedVariables[savedVarName]
+    end,
+    setFunc = function(newValue)
+      savedVariables[savedVarName] = newValue
+      if newValue then
+        setEvents(eventConstant)
+      else
+        unsetEvents(eventConstant)
+      end
+    end
+  }
+end
+
+local function createSimpleCheckboxCallbacks(savedVarName)
+  return {
+    getFunc = function()
+      return savedVariables[savedVarName]
+    end,
+    setFunc = function(newValue)
+      savedVariables[savedVarName] = newValue
+    end
   }
 end
 
 local function createEventsSectionData()
-  addField({
-    type = "header",
-    name = "Events",
-    width = "full"
-  })
+  addField(createHeaderData('Events'))
 
   addField(createDescriptionData('Set the events to trigger restacking.'))
-  addField(createCheckboxData('On Laundering Items', 'Restacking gets triggered when leaving a fence', function()
-    return savedVariables.onFence
-  end, function(newValue)
-    savedVariables.onFence = (newValue)
-    if newValue then
-      setEvents(FENCE)
-    else
-      unsetEvents(FENCE)
-    end
-  end))
+
+  addField(createCheckboxData('On Laundering Items', 'Restacking gets triggered when leaving a fence', createEventCallbacks('onFence', FENCE)))
+  addField(createCheckboxData('On Trading Items', 'Restacking gets triggered when successfully trading with another player', createEventCallbacks('onTrade', TRADE)))
+  addField(createCheckboxData('On Withdrawing Items from Guild Bank', 'Restacking gets triggered when withdrawing items from guild bank', createEventCallbacks('onGuildBank', GUILD_BANK)))
+  addField(createCheckboxData('On Taking Mail Attachements', 'Restacking gets triggered when taking stackable items from mails', createEventCallbacks('onMail', MAIL)))
 end
 
-function Restacker.CreateSettingsWindow()
+local function createOutputData()
+  addField(createHeaderData('Output'))
 
-  savedVariables = Restacker.savedVariables
+  addField(createDescriptionData('Tell restacker to shut up.'))
+
+  addField(createCheckboxData('Shut Up', 'Hides the restacker chat output', createSimpleCheckboxCallbacks('hideStackInfo')))
+end
+
+local function createSubmenuData(name, tooltip, controls)
+  return {
+    type = "submenu",
+    name = name,
+    tooltip = tooltip,
+    controls = controls
+  }
+end
+
+local function createFCOData()
+  local disabled = function() return not FCOIsMarked end
+
+  local controls = {
+    createCheckboxData('Ignore locked items', nil, createSimpleCheckboxCallbacks('fcoLock'), disabled),
+    createCheckboxData('Ignore items marked for selling', nil, createSimpleCheckboxCallbacks('fcoSell'), disabled),
+    createCheckboxData('Ignore items marked for selling at guild store', 'Ignore items marked for selling at guild store', createSimpleCheckboxCallbacks('fcoSellGuild'), disabled),
+  }
+
+  return createSubmenuData('FCO ItemSaver', 'Settings for FCO ItemSaver addon', controls)
+end
+
+local function createItemSaverData()
+  local disabled = function() return not ItemSaver_IsItemSaved end
+
+  local controls = {
+    createCheckboxData('Ignore saved items', nil, createSimpleCheckboxCallbacks('itemSaverLock'), disabled)
+  }
+
+  return createSubmenuData('Item Saver', 'Settings for Item Saver addon', controls)
+end
+
+local function createFilterItData()
+  local disabled = function() return not FilterIt end
+
+  local controls = {
+    createCheckboxData('Ignore saved items', nil, createSimpleCheckboxCallbacks('filterItSave'), disabled),
+    createCheckboxData('Ignore tradehouse items', nil, createSimpleCheckboxCallbacks('filterItTradeHouse'), disabled),
+    createCheckboxData('Ignore trade items', nil, createSimpleCheckboxCallbacks('filterItTrade'), disabled),
+    createCheckboxData('Ignore vendor items', nil, createSimpleCheckboxCallbacks('filterItVendor'), disabled),
+    createCheckboxData('Ignore mail items', nil, createSimpleCheckboxCallbacks('filterItMail'), disabled),
+    createCheckboxData('Ignore alchemy items', nil, createSimpleCheckboxCallbacks('filterItAlchemy'), disabled),
+    createCheckboxData('Ignore enchantment items', nil, createSimpleCheckboxCallbacks('filterItEnchant'), disabled),
+    createCheckboxData('Ignore provisioning items', nil, createSimpleCheckboxCallbacks('filterItProvision'), disabled)
+  }
+
+  return createSubmenuData('FilterIt', 'Settings for Circonians FilterIt addon', controls)
+end
+
+local function createAddonSupportData()
+  addField(createHeaderData('Other Addons Support'))
+  addField(createDescriptionData('Set how Restacker should behave in regards to other addons'))
+  addField(createFCOData())
+  addField(createItemSaverData())
+  addField(createFilterItData())
+end
+
+local function createSettingsWindow()
+
+  registerLocals()
 
   local panelData = {
     type = 'panel',
@@ -59,241 +162,11 @@ function Restacker.CreateSettingsWindow()
   lam:RegisterAddonPanel('Restacker_SETTINGS', panelData)
 
   createEventsSectionData()
-
-  local optionsTable = {
-    [3] = {
-      type = "checkbox",
-      name = "On Laundering Items",
-      tooltip = "Restacking gets triggered when leaving a fence",
-      getFunc = function()
-        return savedVariables.onFence
-      end,
-      setFunc = function(newValue)
-        savedVariables.onFence = (newValue)
-        if newValue then
-          setEvents(FENCE)
-        else
-          unsetEvents(FENCE)
-        end
-      end,
-      width = "full"
-    },
-    [4] = {
-      type = "checkbox",
-      name = "On Trading Items",
-      tooltip = "Restacking gets triggered when successfully trading with another player",
-      getFunc = function()
-        return savedVariables.onTrade
-      end,
-      setFunc = function(newValue)
-        savedVariables.onTrade = (newValue)
-        if newValue then
-          setEvents(TRADE)
-        else
-          unsetEvents(TRADE)
-        end
-      end,
-      width = "full"
-    },
-    [5] = {
-      type = "checkbox",
-      name = "On Withdrawing Items from Guild Bank",
-      tooltip = "Restacking gets triggered when withdrawing items from guild bank",
-      getFunc = function()
-        return savedVariables.onGuildBank
-      end,
-      setFunc = function(newValue)
-        savedVariables.onGuildBank = (newValue)
-        if newValue then
-          setEvents(GUILD_BANK)
-        else
-          unsetEvents(GUILD_BANK)
-        end
-      end,
-      width = "full"
-    },
-    [6] = {
-      type = "checkbox",
-      name = "On Taking Mail Attachements",
-      tooltip = "Restacking gets triggered when taking stackable items from mails",
-      getFunc = function()
-        return savedVariables.onMail
-      end,
-      setFunc = function(newValue)
-        savedVariables.onMail = (newValue)
-        if newValue then
-          setEvents(MAIL)
-        else
-          unsetEvents(MAIL)
-        end
-      end,
-      width = "full"
-    },
-    [7] = {
-      type = "header",
-      name = "Output",
-      width = "full"
-    },
-    [8] = {
-      type = "description",
-      title = nil,
-      text = 'Tell restacker to shut up.',
-      width = "full"
-    },
-    [9] = {
-      type = "checkbox",
-      name = "Shut Up",
-      tooltip = "Hides the restacker chat output",
-      getFunc = function()
-        return not savedVariables.displayStackInfo
-      end,
-      setFunc = function(newValue)
-        savedVariables.displayStackInfo = (not newValue)
-      end,
-      width = "full"
-    },
-    [10] = {
-      type = "header",
-      name = "Other Addons Support",
-      width = "full"
-    },
-    [11] = {
-      type = "description",
-      title = nil,
-      text = 'Set how Restacker should behave in regards to other addons',
-      width = "full"
-    },
-    [12] = {
-      type = "submenu",
-      name = "FCO ItemSaver",
-      tooltip = "Settings for FCO ItemSaver addon",
-      controls = {
-        [1] = {
-          type = "checkbox",
-          name = "Ignore locked items",
-          getFunc = function() return savedVariables.fcoLock end,
-          setFunc = function(newValue)
-            savedVariables.fcoLock = newValue
-          end,
-          disabled = function() return not (FCOIsMarked) end,
-        },
-        [2] = {
-          type = "checkbox",
-          name = "Ignore items marked for selling",
-          getFunc = function() return savedVariables.fcoSell end,
-          setFunc = function(newValue)
-            savedVariables.fcoSell = newValue
-          end,
-          disabled = function() return not (FCOIsMarked) end,
-        },
-        [3] = {
-          type = "checkbox",
-          name = "Ignore items marked for selling at guild store",
-          tooltip = "Ignore items marked for selling at guild store",
-          getFunc = function() return savedVariables.fcoSellGuild end,
-          setFunc = function(newValue)
-            savedVariables.fcoSellGuild = newValue
-          end,
-          disabled = function() return not (FCOIsMarked) end,
-        }
-      }
-    },
-    [13] = {
-      type = "submenu",
-      name = "Item Saver",
-      tooltip = "Settings for Item Saver addon",
-      controls = {
-        [1] = {
-          type = "checkbox",
-          name = "Ignore saved items",
-          getFunc = function() return savedVariables.itemSaverLock end,
-          setFunc = function(newValue)
-            savedVariables.itemSaverLock = newValue
-          end,
-          disabled = function() return not (ItemSaver_IsItemSaved) end,
-        }
-      }
-    },
-    [14] = {
-      type = "submenu",
-      name = "FilterIt",
-      tooltip = "Settings for Circonians FilterIt addon",
-      controls = {
-        [1] = {
-          type = "checkbox",
-          name = "Ignore saved items",
-          getFunc = function() return savedVariables.filterItSave end,
-          setFunc = function(newValue)
-            savedVariables.filterItSave = newValue
-          end,
-          disabled = function() return not (FilterIt) end,
-        },
-        [2] = {
-          type = "checkbox",
-          name = "Ignore tradehouse items",
-          getFunc = function() return savedVariables.filterItTradeHouse end,
-          setFunc = function(newValue)
-            savedVariables.filterItTradeHouse = newValue
-          end,
-          disabled = function() return not (FilterIt) end,
-        },
-        [3] = {
-          type = "checkbox",
-          name = "Ignore trade items",
-          getFunc = function() return savedVariables.filterItTrade end,
-          setFunc = function(newValue)
-            savedVariables.filterItTrade = newValue
-          end,
-          disabled = function() return not (FilterIt) end,
-        },
-        [4] = {
-          type = "checkbox",
-          name = "Ignore vendor items",
-          getFunc = function() return savedVariables.filterItVendor end,
-          setFunc = function(newValue)
-            savedVariables.filterItVendor = newValue
-          end,
-          disabled = function() return not (FilterIt) end,
-        },
-        [5] = {
-          type = "checkbox",
-          name = "Ignore mail items",
-          getFunc = function() return savedVariables.filterItMail end,
-          setFunc = function(newValue)
-            savedVariables.filterItMail = newValue
-          end,
-          disabled = function() return not (FilterIt) end,
-        },
-        [6] = {
-          type = "checkbox",
-          name = "Ignore alchemy items",
-          getFunc = function() return savedVariables.filterItAlchemy end,
-          setFunc = function(newValue)
-            savedVariables.filterItAlchemy = newValue
-          end,
-          disabled = function() return not (FilterIt) end,
-        },
-        [7] = {
-          type = "checkbox",
-          name = "Ignore enchantment items",
-          getFunc = function() return savedVariables.filterItEnchant end,
-          setFunc = function(newValue)
-            savedVariables.filterItEnchant = newValue
-          end,
-          disabled = function() return not (FilterIt) end,
-        },
-        [8] = {
-          type = "checkbox",
-          name = "Ignore provisioning items",
-          getFunc = function() return savedVariables.filterItProvision end,
-          setFunc = function(newValue)
-            savedVariables.filterItProvision = newValue
-          end,
-          disabled = function() return not (FilterIt) end,
-        }
-      }
-    }
-  }
+  createOutputData()
+  createAddonSupportData();
 
   lam:RegisterOptionControls("Restacker_SETTINGS", optionsTable)
 end
+
+-- globals
+Restacker.createSettingsWindow = createSettingsWindow
