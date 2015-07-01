@@ -2,6 +2,8 @@ local FENCE, TRADE, GUILD_BANK, MAIL = Restacker.FENCE, Restacker.TRADE, Restack
 
 local savedVariables
 
+local triedAlready = false
+
 local function getIcon(slot)
   local icon = GetItemInfo(BAG_BACKPACK, slot)
   if icon == nil then
@@ -77,6 +79,7 @@ local function createFilterItOutput(filterItStack, slotData)
 end
 
 local function restackBag()
+  local didRestack = false
   local bagCache = SHARED_INVENTORY:GenerateFullSlotData(nil, BAG_BACKPACK)
   local stacks = {}
   local filterItStacks = {}
@@ -136,6 +139,9 @@ local function restackBag()
             RequestMoveItem(BAG_BACKPACK, bagSlot, BAG_BACKPACK, toSlot, quantity)
           end
 
+          didRestack = true
+          triedAlready = false
+
           local stackFilled = toStackSize + quantity == maxStackSize
           if stackFilled then
             stacks[stackId] = nil
@@ -148,6 +154,19 @@ local function restackBag()
           end
         end
       end
+    end
+  end
+  return didRestack
+end
+
+local function manualRestack()
+  local somethingChanged = restackBag();
+  if not somethingChanged then
+    if triedAlready then
+      d('Still nothing to restack.')
+    else
+      triedAlready = true
+      d('Nothing to restack')
     end
   end
 end
@@ -193,7 +212,7 @@ end
 local restackButton = {
   name = "Restack Bag",
   keybind = "RESTACKER_RESTACK_BAG",
-  callback = function() restackBag() end
+  callback = function() manualRestack() end
 }
 
 local myButtonGroup = {
@@ -255,7 +274,7 @@ Restacker.setEvents = setEvents
 Restacker.unsetEvents = unsetEvents
 
 -- create slash command
-SLASH_COMMANDS["/restack"] = restackBag
+SLASH_COMMANDS["/restack"] = manualRestack
 
 -- register addon load
 EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_ADD_ON_LOADED, onAddOnLoaded)
