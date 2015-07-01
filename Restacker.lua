@@ -156,7 +156,7 @@ local function restackBag()
       end
     end
   end
-  return didRestack
+  return didRestack, triedAlready
 end
 
 local function manualRestack()
