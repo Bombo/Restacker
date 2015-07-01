@@ -1,25 +1,5 @@
 local FENCE, TRADE, GUILD_BANK, MAIL = Restacker.FENCE, Restacker.TRADE, Restacker.GUILD_BANK, Restacker.MAIL
 
-local defaultSettings = {
-  onFence = true,
-  onTrade = false,
-  onGuildBank = false,
-  onMail = false,
-  displayStackInfo = true,
-  fcoLock = false,
-  fcoSell = false,
-  fcoSellGuild = false,
-  itemSaverLock = false,
-  filterItSave = false,
-  filterItTradeHouse = false,
-  filterItTrade = false,
-  filterItVendor = false,
-  filterItMail = false,
-  filterItAlchemy = false,
-  filterItEnchant = false,
-  filterItProvision = false
-}
-
 local savedVariables
 
 local function getIcon(slot)
@@ -50,20 +30,21 @@ local function displayStackResult(toSlot, fromStackSize, toStackSize, quantity)
 end
 
 local function checkFCOLocks(instanceId)
+  local fcoSettings = savedVariables.fco
   if (FCOIsMarked
-      and (savedVariables.fcoLock
-      or savedVariables.fcoSell
-      or savedVariables.fcoSellGuild)) then
+      and (fcoSettings.lock
+      or fcoSettings.sell
+      or fcoSettings.sellGuild)) then
     local _, flags = FCOIsMarked(instanceId, -1)
-    return (savedVariables.fcoLock and flags[1])
-        or (savedVariables.fcoSell and flags[5])
-        or (savedVariables.fcoSellGuild and flags[11])
+    return (fcoSettings.lock and flags[1])
+        or (fcoSettings.sell and flags[5])
+        or (fcoSettings.sellGuild and flags[11])
   end
   return false
 end
 
 local function checkItemSaverLock(bagSlot)
-  if (ItemSaver_IsItemSaved and savedVariables.itemSaverLock) then
+  if (ItemSaver_IsItemSaved and savedVariables.itemSaver.lock) then
     return ItemSaver_IsItemSaved(BAG_BACKPACK, bagSlot)
   end
   return false
@@ -72,15 +53,16 @@ end
 local function checkFilterItLocks(bagSlot)
   if FilterIt then
     local filter = PLAYER_INVENTORY.inventories[INVENTORY_BACKPACK].slots[bagSlot].FilterIt_CurrentFilter
+    local filterItSettings = savedVariables.filterIt
     if filter and filter ~= FILTERIT_NONE then
-      local result = (savedVariables.filterItSave and filter == FILTERIT_ALL
-          or savedVariables.filterItTradeHouse and filter == FILTERIT_TRADINGHOUSE
-          or savedVariables.filterItTrade and filter == FILTERIT_TRADE
-          or savedVariables.filterItVendor and filter == FILTERIT_VENDOR
-          or savedVariables.filterItMail and filter == FILTERIT_MAIL
-          or savedVariables.filterItAlchemy and filter == FILTERIT_ALCHEMY
-          or savedVariables.filterItEnchant and filter == FILTERIT_ENCHANTING
-          or savedVariables.filterItProvision and filter == FILTERIT_PROVISIONING)
+      local result = (filterItSettings.save and filter == FILTERIT_ALL
+          or filterItSettings.tradeHouse and filter == FILTERIT_TRADINGHOUSE
+          or filterItSettings.trade and filter == FILTERIT_TRADE
+          or filterItSettings.vendor and filter == FILTERIT_VENDOR
+          or filterItSettings.mail and filter == FILTERIT_MAIL
+          or filterItSettings.alchemy and filter == FILTERIT_ALCHEMY
+          or filterItSettings.enchant and filter == FILTERIT_ENCHANTING
+          or filterItSettings.provision and filter == FILTERIT_PROVISIONING)
       return result
     end
   end
@@ -88,7 +70,7 @@ end
 
 local function createFilterItOutput(filterItStack, slotData)
   for _, element in ipairs(filterItStack) do
-    if savedVariables.displayStackInfo then
+    if not savedVariables.hideStackInfo then
       displaySkipMessage(element.slot, slotData.stackSize, element.stackSize, 'FilterIt')
     end
   end
@@ -137,11 +119,11 @@ local function restackBag()
         local toSlot = stacks[stackId].slot
         local toStackSize = stacks[stackId].stackSize
         if stacks[stackId].fcoLocked then
-          if savedVariables.displayStackInfo then
+          if not savedVariables.hideStackInfo then
             displaySkipMessage(toSlot, stackSize, toStackSize, 'FCO ItemSaver')
           end
         elseif stacks[stackId].itemSaverLocked then
-          if savedVariables.displayStackInfo then
+          if not savedVariables.hideStackInfo then
             displaySkipMessage(toSlot, stackSize, toStackSize, 'Item Saver')
           end
         else
@@ -161,7 +143,7 @@ local function restackBag()
             stacks[stackId].stackSize = toStackSize + quantity
           end
 
-          if savedVariables.displayStackInfo then
+          if not savedVariables.hideStackInfo then
             displayStackResult(toSlot, stackSize, toStackSize, quantity)
           end
         end
@@ -236,24 +218,23 @@ local function handleKeybindStrip()
 end
 
 local function initialize()
-  savedVariables = ZO_SavedVars:New("RestackerVars", 0.2, nil, defaultSettings)
-  Restacker.savedVariables = savedVariables
+  savedVariables = Restacker.initializeSavedVariables()
 
   Restacker.createSettingsWindow()
 
-  if savedVariables.onFence then
+  if savedVariables.events.onFence then
     setEvents(FENCE)
   end
 
-  if savedVariables.onTrade then
+  if savedVariables.events.onTrade then
     setEvents(TRADE)
   end
 
-  if savedVariables.onGuildBank then
+  if savedVariables.events.onGuildBank then
     setEvents(GUILD_BANK)
   end
 
-  if savedVariables.onMail then
+  if savedVariables.events.onMail then
     setEvents(MAIL)
   end
 

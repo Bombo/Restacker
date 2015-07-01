@@ -22,5 +22,6 @@ libs\LibAddonMenu-2.0\controls\texture.lua
 
 bindings.xml
 Restacker_Namespace.lua
+Restacker_SavedVariables.lua
 Restacker_Settings.lua
 Restacker.lua
