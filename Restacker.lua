@@ -204,27 +204,24 @@ local function onFence()
   EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_CLOSE_FENCE, stackAndUnhook)
 end
 
+local eventMap = {
+  [FENCE] = { EVENT_OPEN_FENCE, onFence },
+  [TRADE] = { EVENT_TRADE_SUCCEEDED, restackBag },
+  [GUILD_BANK] = { EVENT_CLOSE_GUILD_BANK, restackBag },
+  [MAIL] = { EVENT_MAIL_TAKE_ATTACHED_ITEM_SUCCESS, restackBag }
+}
+
 local function setEvents(type)
-  if type == FENCE then
-    EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_OPEN_FENCE, onFence)
-  elseif type == TRADE then
-    EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_TRADE_SUCCEEDED, restackBag)
-  elseif type == GUILD_BANK then
-    EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_CLOSE_GUILD_BANK, restackBag)
-  elseif type == MAIL then
-    EVENT_MANAGER:RegisterForEvent(Restacker.name, EVENT_MAIL_TAKE_ATTACHED_ITEM_SUCCESS, restackBag)
+  local eventData = eventMap[type]
+  if (eventData) then
+    EVENT_MANAGER:RegisterForEvent(Restacker.name, eventData[1], eventData[2])
   end
 end
 
 local function unsetEvents(type)
-  if type == FENCE then
-    EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_OPEN_FENCE)
-  elseif type == TRADE then
-    EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_TRADE_SUCCEEDED)
-  elseif type == GUILD_BANK then
-    EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_CLOSE_GUILD_BANK)
-  elseif type == MAIL then
-    EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_MAIL_TAKE_ATTACHED_ITEM_SUCCESS)
+  local eventData = eventMap[type]
+  if (eventData) then
+    EVENT_MANAGER:UnregisterForEvent(Restacker.name, eventData[1])
   end
 end
 
