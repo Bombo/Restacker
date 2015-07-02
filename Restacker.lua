@@ -129,33 +129,23 @@ local function restackBag(bagId)
     local instanceId = GetItemInstanceId(bagId, bagSlot)
     local stackId = instanceId
 
-    if bagSlotData.stolen then
-      stackId = stackId .. 1
-    else
-      stackId = stackId .. 0
-    end
+    stackId = stackId .. (bagSlotData.stolen and 1 or 0)
 
-    if stackSize ~= maxStackSize then
-      if checkFilterItLocks(bagSlot) then
-        local slotData = { slot = bagSlot, stackSize = stackSize }
+    if stackSize < maxStackSize then -- only look for unfinished sracks
+      if checkFilterItLocks(bagSlot) then -- stack is locked by FilterIt settings
+        local slotData = createSlotData(bagId, bagSlot, stackSize)
         if filterItStacks[instanceId] then
           createFilterItOutput(filterItStacks[instanceId], bagId, slotData)
           table.insert(filterItStacks[instanceId], slotData)
         else
           filterItStacks[instanceId] = { slotData }
         end
-      elseif stacks[stackId] == nil and stackSize < maxStackSize then
-        stacks[stackId] = {
-          slot = bagSlot,
-          data = bagSlotData,
-          stackSize = stackSize,
-          fcoLocked = checkFCOLocks(instanceId),
-          itemSaverLocked = checkItemSaverLock(bagId, bagSlot)
-        }
+      elseif stacks[stackId] == nil then -- didn't look at that item type yet
+        stacks[stackId] = createSlotData(bagId, bagSlot, bagSlotData, stackSize, instanceId)
         if filterItStacks[instanceId] then
           createFilterItOutput(filterItStacks[instanceId], bagId, stacks[stackId])
         end
-      else
+      else -- unfinished stack with existing stacks of the same item type
         if filterItStacks[instanceId] then
           createFilterItOutput(filterItStacks[instanceId], bagId, stacks[stackId])
         end
@@ -169,11 +159,8 @@ local function restackBag(bagId)
           local toSlot = stacks[stackId].slot
           local toStackSize = stacks[stackId].stackSize
           local quantity = zo_min(stackSize, maxStackSize - toStackSize)
-          if IsProtectedFunction("RequestMoveItem") then
-            CallSecureProtected("RequestMoveItem", bagId, bagSlot, bagId, toSlot, quantity)
-          else
-            RequestMoveItem(bagId, bagSlot, bagId, toSlot, quantity)
-          end
+
+          moveItem(bagId, bagSlot, bagId, toSlot, quantity)
 
           didRestack = true
           triedAlready[bagId] = false
@@ -185,9 +172,7 @@ local function restackBag(bagId)
             stacks[stackId].stackSize = toStackSize + quantity
           end
 
-          if not savedVariables.hideStackInfo then
-            displayStackResult(bagId, toSlot, stackSize, toStackSize, quantity)
-          end
+          displayStackResult(bagId, toSlot, stackSize, toStackSize, quantity)
         end
       end
     end
