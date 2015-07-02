@@ -31,20 +31,24 @@ local function getIcon(bagId, slot)
 end
 
 local function displaySkipMessage(bagId, slot, fromStackSize, toStackSize, reason)
-  local itemLink = GetItemLink(bagId, slot, LINK_STYLE_DEFAULT)
-  local output = zo_strformat('Skipped restacking of <<5>><<t:1>> ([<<2>>][<<3>>]) because of <<4>> settings', itemLink, toStackSize, fromStackSize, reason, getIcon(bagId, slot))
-  d(output)
+  if not savedVariables.hideStackInfo then
+    local itemLink = GetItemLink(bagId, slot, LINK_STYLE_DEFAULT)
+    local output = zo_strformat('Skipped restacking of <<5>><<t:1>> ([<<2>>][<<3>>]) because of <<4>> settings', itemLink, toStackSize, fromStackSize, reason, getIcon(bagId, slot))
+    d(output)
+  end
 end
 
 local function displayStackResult(bagId, toSlot, fromStackSize, toStackSize, quantity)
-  local itemLink = GetItemLink(bagId, toSlot, LINK_STYLE_DEFAULT)
-  local toStackSizeAfter = toStackSize + quantity
-  local output = zo_strformat('Restacked <<5>><<t:1>>: [<<2>>][<<3>>] -> [<<4>>]', itemLink, toStackSize, fromStackSize, toStackSizeAfter, getIcon(bagId, toSlot))
-  if fromStackSize - quantity > 0 then
-    local fromStackSizeAfter = fromStackSize - quantity
-    output = zo_strformat('<<1>>[<<2>>]', output, fromStackSizeAfter)
+  if not savedVariables.hideStackInfo then
+    local itemLink = GetItemLink(bagId, toSlot, LINK_STYLE_DEFAULT)
+    local toStackSizeAfter = toStackSize + quantity
+    local output = zo_strformat('Restacked <<5>><<t:1>>: [<<2>>][<<3>>] -> [<<4>>]', itemLink, toStackSize, fromStackSize, toStackSizeAfter, getIcon(bagId, toSlot))
+    if fromStackSize - quantity > 0 then
+      local fromStackSizeAfter = fromStackSize - quantity
+      output = zo_strformat('<<1>>[<<2>>]', output, fromStackSizeAfter)
+    end
+    d(output)
   end
-  d(output)
 end
 
 local function checkFCOLocks(instanceId)
@@ -87,11 +91,29 @@ local function checkFilterItLocks(bagSlot)
 end
 
 local function createFilterItOutput(filterItStack, bagId, slotData)
-  for _, element in ipairs(filterItStack) do
-    if not savedVariables.hideStackInfo then
+  if not savedVariables.hideStackInfo then
+    for _, element in ipairs(filterItStack) do
       displaySkipMessage(bagId, element.slot, slotData.stackSize, element.stackSize, 'FilterIt')
     end
   end
+end
+
+local function moveItem(fromBagId, fromSlot, toBagId, toSlot, quantity)
+  if IsProtectedFunction("RequestMoveItem") then
+    CallSecureProtected("RequestMoveItem", fromBagId, fromSlot, toBagId, toSlot, quantity)
+  else
+    RequestMoveItem(fromBagId, fromSlot, toBagId, toSlot, quantity)
+  end
+end
+
+local function createSlotData(bagId, bagSlot, bagSlotData, stackSize, instanceId)
+    return {
+      slot = bagSlot,
+      data = bagSlotData,
+      stackSize = stackSize,
+      fcoLocked = checkFCOLocks(instanceId),
+      itemSaverLocked = checkItemSaverLock(bagId, bagSlot)
+    }
 end
 
 local function restackBag(bagId)
@@ -140,13 +162,9 @@ local function restackBag(bagId)
         local toSlot = stacks[stackId].slot
         local toStackSize = stacks[stackId].stackSize
         if stacks[stackId].fcoLocked then
-          if not savedVariables.hideStackInfo then
-            displaySkipMessage(bagId, toSlot, stackSize, toStackSize, 'FCO ItemSaver')
-          end
+          displaySkipMessage(bagId, toSlot, stackSize, toStackSize, 'FCO ItemSaver')
         elseif stacks[stackId].itemSaverLocked then
-          if not savedVariables.hideStackInfo then
-            displaySkipMessage(bagId, toSlot, stackSize, toStackSize, 'Item Saver')
-          end
+          displaySkipMessage(bagId, toSlot, stackSize, toStackSize, 'Item Saver')
         else
           local toSlot = stacks[stackId].slot
           local toStackSize = stacks[stackId].stackSize
