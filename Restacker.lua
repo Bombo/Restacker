@@ -167,7 +167,11 @@ local function restackBag(bagId)
 
           local stackFilled = toStackSize + quantity == maxStackSize
           if stackFilled then
-            stacks[stackId] = nil
+            if quantity == stackSize then
+              stacks[stackId] = nil
+            else
+              stacks[stackId] = createSlotData(bagId, bagSlot, bagSlotData, stackSize - quantity, instanceId)
+            end
           else
             stacks[stackId].stackSize = toStackSize + quantity
           end
