@@ -2,7 +2,10 @@
   <Layer name="SI_KEYBINDINGS_LAYER_GENERAL">
     <Category name="|c81BAC7Restacker|r">
       <Action name="RESTACKER_RESTACK_BAG">
-        <Down>Restacker.RestackBag()</Down>
+        <Down>Restacker.restackBag()</Down>
+      </Action>
+      <Action name="RESTACKER_RESTACK_BANK">
+        <Down>Restacker.restackBank()</Down>
       </Action>
     </Category>
   </Layer>

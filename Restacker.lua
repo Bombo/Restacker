@@ -15,10 +15,13 @@ local FENCE, TRADE, GUILD_BANK, MAIL = Restacker.FENCE, Restacker.TRADE, Restack
 
 local savedVariables
 
-local triedAlready = false
+local triedAlready = {
+  [BAG_BACKPACK] = false,
+  [BAG_BANK] = false
+}
 
-local function getIcon(slot)
-  local icon = GetItemInfo(BAG_BACKPACK, slot)
+local function getIcon(bagId, slot)
+  local icon = GetItemInfo(bagId, slot)
   if icon == nil then
     return ''
   else
@@ -27,16 +30,16 @@ local function getIcon(slot)
   end
 end
 
-local function displaySkipMessage(slot, fromStackSize, toStackSize, reason)
-  local itemLink = GetItemLink(BAG_BACKPACK, slot, LINK_STYLE_DEFAULT)
-  local output = zo_strformat('Skipped restacking of <<5>><<t:1>> ([<<2>>][<<3>>]) because of <<4>> settings', itemLink, toStackSize, fromStackSize, reason, getIcon(slot))
+local function displaySkipMessage(bagId, slot, fromStackSize, toStackSize, reason)
+  local itemLink = GetItemLink(bagId, slot, LINK_STYLE_DEFAULT)
+  local output = zo_strformat('Skipped restacking of <<5>><<t:1>> ([<<2>>][<<3>>]) because of <<4>> settings', itemLink, toStackSize, fromStackSize, reason, getIcon(bagId, slot))
   d(output)
 end
 
-local function displayStackResult(toSlot, fromStackSize, toStackSize, quantity)
-  local itemLink = GetItemLink(BAG_BACKPACK, toSlot, LINK_STYLE_DEFAULT)
+local function displayStackResult(bagId, toSlot, fromStackSize, toStackSize, quantity)
+  local itemLink = GetItemLink(bagId, toSlot, LINK_STYLE_DEFAULT)
   local toStackSizeAfter = toStackSize + quantity
-  local output = zo_strformat('Restacked <<5>><<t:1>>: [<<2>>][<<3>>] -> [<<4>>]', itemLink, toStackSize, fromStackSize, toStackSizeAfter, getIcon(toSlot))
+  local output = zo_strformat('Restacked <<5>><<t:1>>: [<<2>>][<<3>>] -> [<<4>>]', itemLink, toStackSize, fromStackSize, toStackSizeAfter, getIcon(bagId, toSlot))
   if fromStackSize - quantity > 0 then
     local fromStackSizeAfter = fromStackSize - quantity
     output = zo_strformat('<<1>>[<<2>>]', output, fromStackSizeAfter)
@@ -58,9 +61,9 @@ local function checkFCOLocks(instanceId)
   return false
 end
 
-local function checkItemSaverLock(bagSlot)
+local function checkItemSaverLock(bagId, bagSlot)
   if (ItemSaver_IsItemSaved and savedVariables.itemSaver.lock) then
-    return ItemSaver_IsItemSaved(BAG_BACKPACK, bagSlot)
+    return ItemSaver_IsItemSaved(bagId, bagSlot)
   end
   return false
 end
@@ -83,23 +86,25 @@ local function checkFilterItLocks(bagSlot)
   end
 end
 
-local function createFilterItOutput(filterItStack, slotData)
+local function createFilterItOutput(filterItStack, bagId, slotData)
   for _, element in ipairs(filterItStack) do
     if not savedVariables.hideStackInfo then
-      displaySkipMessage(element.slot, slotData.stackSize, element.stackSize, 'FilterIt')
+      displaySkipMessage(bagId, element.slot, slotData.stackSize, element.stackSize, 'FilterIt')
     end
   end
 end
 
-local function restackBag()
+local function restackBag(bagId)
+  bagId = bagId or BAG_BACKPACK
+
   local didRestack = false
-  local bagCache = SHARED_INVENTORY:GenerateFullSlotData(nil, BAG_BACKPACK)
+  local bagCache = SHARED_INVENTORY:GenerateFullSlotData(nil, bagId)
   local stacks = {}
   local filterItStacks = {}
 
   for bagSlot, bagSlotData in pairs(bagCache) do
-    local stackSize, maxStackSize = GetSlotStackSize(BAG_BACKPACK, bagSlot)
-    local instanceId = GetItemInstanceId(BAG_BACKPACK, bagSlot)
+    local stackSize, maxStackSize = GetSlotStackSize(bagId, bagSlot)
+    local instanceId = GetItemInstanceId(bagId, bagSlot)
     local stackId = instanceId
 
     if bagSlotData.stolen then
@@ -112,7 +117,7 @@ local function restackBag()
       if checkFilterItLocks(bagSlot) then
         local slotData = { slot = bagSlot, stackSize = stackSize }
         if filterItStacks[instanceId] then
-          createFilterItOutput(filterItStacks[instanceId], slotData)
+          createFilterItOutput(filterItStacks[instanceId], bagId, slotData)
           table.insert(filterItStacks[instanceId], slotData)
         else
           filterItStacks[instanceId] = { slotData }
@@ -123,37 +128,37 @@ local function restackBag()
           data = bagSlotData,
           stackSize = stackSize,
           fcoLocked = checkFCOLocks(instanceId),
-          itemSaverLocked = checkItemSaverLock(bagSlot)
+          itemSaverLocked = checkItemSaverLock(bagId, bagSlot)
         }
         if filterItStacks[instanceId] then
-          createFilterItOutput(filterItStacks[instanceId], stacks[stackId])
+          createFilterItOutput(filterItStacks[instanceId], bagId, stacks[stackId])
         end
       else
         if filterItStacks[instanceId] then
-          createFilterItOutput(filterItStacks[instanceId], stacks[stackId])
+          createFilterItOutput(filterItStacks[instanceId], bagId, stacks[stackId])
         end
         local toSlot = stacks[stackId].slot
         local toStackSize = stacks[stackId].stackSize
         if stacks[stackId].fcoLocked then
           if not savedVariables.hideStackInfo then
-            displaySkipMessage(toSlot, stackSize, toStackSize, 'FCO ItemSaver')
+            displaySkipMessage(bagId, toSlot, stackSize, toStackSize, 'FCO ItemSaver')
           end
         elseif stacks[stackId].itemSaverLocked then
           if not savedVariables.hideStackInfo then
-            displaySkipMessage(toSlot, stackSize, toStackSize, 'Item Saver')
+            displaySkipMessage(bagId, toSlot, stackSize, toStackSize, 'Item Saver')
           end
         else
           local toSlot = stacks[stackId].slot
           local toStackSize = stacks[stackId].stackSize
           local quantity = zo_min(stackSize, maxStackSize - toStackSize)
           if IsProtectedFunction("RequestMoveItem") then
-            CallSecureProtected("RequestMoveItem", BAG_BACKPACK, bagSlot, BAG_BACKPACK, toSlot, quantity)
+            CallSecureProtected("RequestMoveItem", bagId, bagSlot, bagId, toSlot, quantity)
           else
-            RequestMoveItem(BAG_BACKPACK, bagSlot, BAG_BACKPACK, toSlot, quantity)
+            RequestMoveItem(bagId, bagSlot, bagId, toSlot, quantity)
           end
 
           didRestack = true
-          triedAlready = false
+          triedAlready[bagId] = false
 
           local stackFilled = toStackSize + quantity == maxStackSize
           if stackFilled then
@@ -163,22 +168,23 @@ local function restackBag()
           end
 
           if not savedVariables.hideStackInfo then
-            displayStackResult(toSlot, stackSize, toStackSize, quantity)
+            displayStackResult(bagId, toSlot, stackSize, toStackSize, quantity)
           end
         end
       end
     end
   end
-  return didRestack, triedAlready
+  return didRestack
 end
 
-local function manualRestack()
-  local somethingChanged = restackBag();
+local function manualRestack(bagId)
+  bagId = bagId or BAG_BACKPACK
+  local somethingChanged = restackBag(bagId);
   if not somethingChanged then
-    if triedAlready then
+    if triedAlready[bagId] then
       d('Still nothing to restack.')
     else
-      triedAlready = true
+      triedAlready[bagId] = true
       d('Nothing to restack')
     end
   end
@@ -228,6 +234,17 @@ local restackButton = {
   callback = function() manualRestack() end
 }
 
+local restackBankButton = {
+  name = "Restack Bank",
+  keybind = "RESTACKER_RESTACK_BANK",
+  callback = function()
+    local bankScene = SCENE_MANAGER:GetScene("bank")
+    if (SCENE_MANAGER.currentScene == bankScene) then
+      manualRestack(BAG_BANK)
+    end
+  end
+}
+
 local myButtonGroup = {
   restackButton,
   alignment = KEYBIND_STRIP_ALIGN_CENTER,
@@ -247,6 +264,9 @@ local function handleKeybindStrip()
 
   table.insert(PLAYER_INVENTORY.bankDepositTabKeybindButtonGroup, restackButton)
   KEYBIND_STRIP:UpdateKeybindButtonGroup(PLAYER_INVENTORY.bankDepositTabKeybindButtonGroup)
+
+  table.insert(PLAYER_INVENTORY.bankWithdrawTabKeybindButtonGroup, restackBankButton)
+  KEYBIND_STRIP:UpdateKeybindButtonGroup(PLAYER_INVENTORY.bankWithdrawTabKeybindButtonGroup)
 end
 
 local function initialize()
@@ -274,6 +294,7 @@ local function initialize()
 
   EVENT_MANAGER:UnregisterForEvent(Restacker.name, EVENT_ADD_ON_LOADED)
 
+  ZO_CreateStringId("SI_BINDING_NAME_RESTACKER_RESTACK_BANK", "Restack Bank")
   ZO_CreateStringId("SI_BINDING_NAME_RESTACKER_RESTACK_BAG", "Restack Bag")
 end
 
@@ -285,6 +306,8 @@ end
 -- globals
 Restacker.setEvents = setEvents
 Restacker.unsetEvents = unsetEvents
+Restacker.restackBag = restackButton.callback
+Restacker.restackBank = restackBankButton.callback
 
 -- create slash command
 SLASH_COMMANDS["/restack"] = manualRestack
