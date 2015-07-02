@@ -164,7 +164,10 @@ local function createSettingsWindow()
 
   local panelData = {
     type = 'panel',
-    name = 'Restacker'
+    name = 'Restacker',
+    displayName = '|c81BAC7Restacker|r',
+    author = 'Bombo',
+    version = tostring(Restacker.version)
   }
   lam:RegisterAddonPanel('Restacker_SETTINGS', panelData)
 
