@@ -1,4 +1,4 @@
-local _G, next, GetDisplayName, GetUnitName, ReloadUI = _G, next, GetDisplayName, GetUnitName, ReloadUI
+local _G, next, GetDisplayName, GetUnitName, ZO_SavedVars = _G, next, GetDisplayName, GetUnitName, ZO_SavedVars
 local Restacker = Restacker
 
 local defaultSettings = {

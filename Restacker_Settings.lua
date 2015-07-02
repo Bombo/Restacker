@@ -3,6 +3,7 @@ local optionsTable = {}
 local index = 0
 local savedVariables
 local setEvents, unsetEvents
+local Restacker = Restacker
 local FENCE, TRADE, GUILD_BANK, MAIL = Restacker.FENCE, Restacker.TRADE, Restacker.GUILD_BANK, Restacker.MAIL
 
 local FCOIsMarked = FCOIsMarked
