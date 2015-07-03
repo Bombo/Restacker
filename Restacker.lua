@@ -22,12 +22,8 @@ local triedAlready = {
 
 local function getIcon(bagId, slot)
   local icon = GetItemInfo(bagId, slot)
-  if icon == nil then
-    return ''
-  else
-    local fontSize = GetChatFontSize();
-    return zo_iconFormat(icon, fontSize, fontSize) .. ' '
-  end
+  local fontSize = GetChatFontSize();
+  return icon == nil and '' or zo_iconFormat(icon, fontSize, fontSize) .. ' '
 end
 
 local function displaySkipMessage(bagId, slot, fromStackSize, toStackSize, reason)
