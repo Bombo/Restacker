@@ -196,7 +196,7 @@ end
 
 -- restack function to be called by slash commands of buttons / key binds
 local function manualRestack(bagId)
-  bagId = bagId or BAG_BACKPACK
+  bagId = bagId ~= '' and bagId or BAG_BACKPACK
   local somethingChanged = restackBag(bagId);
   if not somethingChanged then
     if triedAlready[bagId] then
