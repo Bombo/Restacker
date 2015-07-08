@@ -75,9 +75,10 @@ local function checkItemSaverLock(bagId, bagSlot)
 end
 
 -- check an item by location for FilterIt locks
-local function checkFilterItLocks(bagSlot)
+local function checkFilterItLocks(bagId, bagSlot)
+  local inventoryId = bagId == BAG_BANK and INVENTORY_BANK or INVENTORY_BACKPACK
   if FilterIt then
-    local filter = PLAYER_INVENTORY.inventories[INVENTORY_BACKPACK].slots[bagSlot].FilterIt_CurrentFilter
+    local filter = PLAYER_INVENTORY.inventories[inventoryId].slots[bagSlot].FilterIt_CurrentFilter
     local filterItSettings = savedVariables.filterIt
     if filter and filter ~= FILTERIT_NONE then
       local result = (filterItSettings.save and filter == FILTERIT_ALL
@@ -142,7 +143,7 @@ local function restackBag(bagId)
     stackId = stackId .. (bagSlotData.stolen and 1 or 0)
 
     if stackSize < maxStackSize then -- only look for unfinished sracks
-      if checkFilterItLocks(bagSlot) then -- stack is locked by FilterIt settings
+      if checkFilterItLocks(bagId, bagSlot) then -- stack is locked by FilterIt settings
         local slotData = createSlotData(bagId, bagSlot, stackSize)
         if filterItStacks[instanceId] then
           createFilterItOutput(filterItStacks[instanceId], bagId, slotData)
