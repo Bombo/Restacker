@@ -51,7 +51,7 @@ end
 
 local function getDeprecatedVariables()
   local currentSavedVariables = _G['RestackerVars']
-  if next(currentSavedVariables) then
+  if currentSavedVariables and next(currentSavedVariables) then
     currentSavedVariables = currentSavedVariables.Default[GetDisplayName()][GetUnitName("player")]
     return currentSavedVariables and currentSavedVariables.version == 0.2 and currentSavedVariables
   end

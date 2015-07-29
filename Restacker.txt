@@ -1,6 +1,6 @@
 ## Title: Restacker
 ## Description: Simple restacking addon, keeping your inventory and bank organized.
-## APIVersion: 100011
+## APIVersion: 100012
 ## OptionalDependsOn: LibAddonMenu-2.0 ItemSaver FCOItemSaver FilterIt
 ## SavedVariables: RestackerVars
  
