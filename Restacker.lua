@@ -1,6 +1,6 @@
 -- creating local references of everything global to get the edge in performance ;)
 local table, ipairs, pairs = table, ipairs, pairs
-local BAG_BACKPACK, BAG_BANK, LINK_STYLE_DEFAULT, INVENTORY_BACKPACK, KEYBIND_STRIP_ALIGN_CENTER, KEYBIND_STRIP, SCENE_SHOWN, SCENE_HIDDEN = BAG_BACKPACK, BAG_BANK, LINK_STYLE_DEFAULT, INVENTORY_BACKPACK, KEYBIND_STRIP_ALIGN_CENTER, KEYBIND_STRIP, SCENE_SHOWN, SCENE_HIDDEN
+local BAG_BACKPACK, BAG_BANK, LINK_STYLE_DEFAULT, INVENTORY_BACKPACK, INVENTORY_BANK,  KEYBIND_STRIP_ALIGN_CENTER, KEYBIND_STRIP, SCENE_SHOWN, SCENE_HIDDEN = BAG_BACKPACK, BAG_BANK, LINK_STYLE_DEFAULT, INVENTORY_BACKPACK, INVENTORY_BANK, KEYBIND_STRIP_ALIGN_CENTER, KEYBIND_STRIP, SCENE_SHOWN, SCENE_HIDDEN
 local EVENT_ADD_ON_LOADED, EVENT_CLOSE_STORE, EVENT_CLOSE_FENCE, EVENT_OPEN_FENCE, EVENT_TRADE_SUCCEEDED, EVENT_CLOSE_GUILD_BANK, EVENT_MAIL_TAKE_ATTACHED_ITEM_SUCCESS = EVENT_ADD_ON_LOADED, EVENT_CLOSE_STORE, EVENT_CLOSE_FENCE, EVENT_OPEN_FENCE, EVENT_TRADE_SUCCEEDED, EVENT_CLOSE_GUILD_BANK, EVENT_MAIL_TAKE_ATTACHED_ITEM_SUCCESS
 local PLAYER_INVENTORY, SHARED_INVENTORY, EVENT_MANAGER, SCENE_MANAGER, SLASH_COMMANDS = PLAYER_INVENTORY, SHARED_INVENTORY, EVENT_MANAGER, SCENE_MANAGER, SLASH_COMMANDS
 local GetItemInfo, GetItemLink, GetItemInstanceId, GetChatFontSize, GetSlotStackSize = GetItemInfo, GetItemLink, GetItemInstanceId, GetChatFontSize, GetSlotStackSize
@@ -29,11 +29,13 @@ local function getIcon(bagId, slot)
 end
 
 -- display a message, if restacking incomplete stacks was skipped because of some addon settings (reason == adoon name)
-local function displaySkipMessage(bagId, slot, fromStackSize, toStackSize, reason)
+local function displaySkipMessage(bagId, slot, addonLocks)
   if not savedVariables.hideStackInfo then
     local itemLink = GetItemLink(bagId, slot, LINK_STYLE_DEFAULT)
-    local output = zo_strformat('Skipped restacking of <<5>><<t:1>> ([<<2>>][<<3>>]) because of <<4>> settings', itemLink, toStackSize, fromStackSize, reason, getIcon(bagId, slot))
-    d(output)
+    for _, addon in pairs(addonLocks) do
+      local output = zo_strformat('Skipped restacking of <<3>><<t:1>> because of <<2>> settings', itemLink, addon, getIcon(bagId, slot))
+      d(output)
+    end
   end
 end
 
@@ -52,7 +54,8 @@ local function displayStackResult(bagId, toSlot, fromStackSize, toStackSize, qua
 end
 
 -- check an item by instanceId for FCO ItemSaver locks
-local function checkFCOLocks(instanceId)
+local function checkFCOLocks(bagId, bagSlot)
+  local instanceId = GetItemInstanceId(bagId, bagSlot)
   local fcoSettings = savedVariables.fco
   if (FCOIsMarked
       and (fcoSettings.lock
@@ -94,16 +97,6 @@ local function checkFilterItLocks(bagId, bagSlot)
   end
 end
 
--- FilterIt locks by slot, instead of just item type / instanceId. So we need a different output function, as some
--- incomplete stacks might be restackable, whereas others aren't.
-local function createFilterItOutput(filterItStack, bagId, slotData)
-  if not savedVariables.hideStackInfo then
-    for _, element in ipairs(filterItStack) do
-      displaySkipMessage(bagId, element.slot, slotData.stackSize, element.stackSize, 'FilterIt')
-    end
-  end
-end
-
 -- wraps the RequestMoveItem call for convenience
 local function moveItem(fromBagId, fromSlot, toBagId, toSlot, quantity)
   if IsProtectedFunction("RequestMoveItem") then
@@ -114,14 +107,31 @@ local function moveItem(fromBagId, fromSlot, toBagId, toSlot, quantity)
 end
 
 -- create a table containing meta information for a slot
-local function createSlotData(bagId, bagSlot, bagSlotData, stackSize, instanceId)
+local function createSlotData(bagId, bagSlot, bagSlotData, stackSize, addonLocks)
     return {
       slot = bagSlot,
       data = bagSlotData,
       stackSize = stackSize,
-      fcoLocked = checkFCOLocks(instanceId),
-      itemSaverLocked = checkItemSaverLock(bagId, bagSlot)
+      addonLocks = addonLocks
     }
+end
+
+local function checkIsAddonLocked(bagId, bagSlot)
+  local result = {}
+
+  if (checkFCOLocks(bagId, bagSlot)) then
+    table.insert(result, 'FCO ItemSaver')
+  end
+
+  if (checkItemSaverLock(bagId, bagSlot)) then
+    table.insert(result, 'Item Saver')
+  end
+
+  if (checkFilterItLocks(bagId, bagSlot)) then
+    table.insert(result, 'FilterIt')
+  end
+
+  return table.getn(result) > 0 and result or false
 end
 
 --[[ restack the bag by a given bagId (defaults to BAG_BACKPACK) by iterating over every bag slot of that bag and
@@ -133,7 +143,7 @@ local function restackBag(bagId)
   local didRestack = false
   local bagCache = SHARED_INVENTORY:GenerateFullSlotData(nil, bagId)
   local stacks = {}
-  local filterItStacks = {}
+  local lockedStacks = {}
 
   for bagSlot, bagSlotData in pairs(bagCache) do
     local stackSize, maxStackSize = GetSlotStackSize(bagId, bagSlot)
@@ -143,32 +153,27 @@ local function restackBag(bagId)
     stackId = stackId .. (bagSlotData.stolen and 1 or 0)
 
     if stackSize < maxStackSize then -- only look for unfinished sracks
-      if checkFilterItLocks(bagId, bagSlot) then -- stack is locked by FilterIt settings
-        local slotData = createSlotData(bagId, bagSlot, stackSize)
-        if filterItStacks[instanceId] then
-          createFilterItOutput(filterItStacks[instanceId], bagId, slotData)
-          table.insert(filterItStacks[instanceId], slotData)
-        else
-          filterItStacks[instanceId] = { slotData }
+      local addonLocks = checkIsAddonLocked(bagId, bagSlot)
+      local hasAddonLockedStacks = lockedStacks[stackId] ~= nil
+      local stackTable = addonLocks and lockedStacks or stacks
+      local stack = stackTable[stackId]
+      local first = false
+      if not stack then
+        stack = {}
+        stackTable[stackId] = stack
+        first = true
+      end
+
+      table.insert(stack, createSlotData(bagId, bagSlot, bagSlotData, stackSize, addonLocks))
+
+      if not first or hasAddonLockedStacks then
+        if addonLocks or not addonLocks and hasAddonLockedStacks then
+          displaySkipMessage(bagId, bagSlot, addonLocks)
         end
-      elseif not stacks[stackId] then -- didn't look at that item type yet
-        stacks[stackId] = createSlotData(bagId, bagSlot, bagSlotData, stackSize, instanceId)
-        if filterItStacks[instanceId] then
-          createFilterItOutput(filterItStacks[instanceId], bagId, stacks[stackId])
-        end
-      else -- unfinished stack with existing stacks of the same item type
-        if filterItStacks[instanceId] then
-          createFilterItOutput(filterItStacks[instanceId], bagId, stacks[stackId])
-        end
-        local toSlot = stacks[stackId].slot
-        local toStackSize = stacks[stackId].stackSize
-        if stacks[stackId].fcoLocked then
-          displaySkipMessage(bagId, toSlot, stackSize, toStackSize, 'FCO ItemSaver')
-        elseif stacks[stackId].itemSaverLocked then
-          displaySkipMessage(bagId, toSlot, stackSize, toStackSize, 'Item Saver')
-        else
-          local toSlot = stacks[stackId].slot
-          local toStackSize = stacks[stackId].stackSize
+        if not addonLocks then
+          local toData = stack[1]
+          local toSlot = toData.slot
+          local toStackSize = toData.stackSize
           local quantity = zo_min(stackSize, maxStackSize - toStackSize)
 
           moveItem(bagId, bagSlot, bagId, toSlot, quantity)
@@ -178,13 +183,12 @@ local function restackBag(bagId)
 
           local stackFilled = toStackSize + quantity == maxStackSize
           if stackFilled then
-            if quantity == stackSize then
-              stacks[stackId] = nil
-            else
-              stacks[stackId] = createSlotData(bagId, bagSlot, bagSlotData, stackSize - quantity, instanceId)
+            table.remove(stack, 1)
+            if quantity ~= stackSize then
+              table.insert(stack, createSlotData(bagId, bagSlot, bagSlotData, stackSize - quantity, instanceId))
             end
           else
-            stacks[stackId].stackSize = toStackSize + quantity
+            toData.stackSize = toStackSize + quantity
           end
 
           displayStackResult(bagId, toSlot, stackSize, toStackSize, quantity)
