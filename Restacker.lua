@@ -1,5 +1,5 @@
 -- creating local references of everything global to get the edge in performance ;)
-local table, ipairs, pairs = table, ipairs, pairs
+local table, pairs = table, pairs
 local BAG_BACKPACK, BAG_BANK, LINK_STYLE_DEFAULT, INVENTORY_BACKPACK, INVENTORY_BANK,  KEYBIND_STRIP_ALIGN_CENTER, KEYBIND_STRIP, SCENE_SHOWN, SCENE_HIDDEN = BAG_BACKPACK, BAG_BANK, LINK_STYLE_DEFAULT, INVENTORY_BACKPACK, INVENTORY_BANK, KEYBIND_STRIP_ALIGN_CENTER, KEYBIND_STRIP, SCENE_SHOWN, SCENE_HIDDEN
 local EVENT_ADD_ON_LOADED, EVENT_CLOSE_STORE, EVENT_CLOSE_FENCE, EVENT_OPEN_FENCE, EVENT_TRADE_SUCCEEDED, EVENT_CLOSE_GUILD_BANK, EVENT_MAIL_TAKE_ATTACHED_ITEM_SUCCESS = EVENT_ADD_ON_LOADED, EVENT_CLOSE_STORE, EVENT_CLOSE_FENCE, EVENT_OPEN_FENCE, EVENT_TRADE_SUCCEEDED, EVENT_CLOSE_GUILD_BANK, EVENT_MAIL_TAKE_ATTACHED_ITEM_SUCCESS
 local PLAYER_INVENTORY, SHARED_INVENTORY, EVENT_MANAGER, SCENE_MANAGER, SLASH_COMMANDS = PLAYER_INVENTORY, SHARED_INVENTORY, EVENT_MANAGER, SCENE_MANAGER, SLASH_COMMANDS
@@ -29,26 +29,19 @@ local function getIcon(bagId, slot)
 end
 
 -- display a message, if restacking incomplete stacks was skipped because of some addon settings (reason == adoon name)
-local function displaySkipMessage(bagId, slot, addonLocks)
+local function displaySkipMessage(bagId, slot)
   if not savedVariables.hideStackInfo then
     local itemLink = GetItemLink(bagId, slot, LINK_STYLE_DEFAULT)
-    for _, addon in pairs(addonLocks) do
-      local output = zo_strformat('Skipped restacking of <<3>><<t:1>> because of <<2>> settings', itemLink, addon, getIcon(bagId, slot))
-      d(output)
-    end
+    local output = zo_strformat('Skipped restacking of <<2>><<t:1>> because of addon locks', itemLink, getIcon(bagId, slot))
+    d(output)
   end
 end
 
 -- display the result of restacking (outputs "Restacked [ICON] ITEM_NAME: [toStackSize][fromStackSize] -> [toStackSizeAfter]
-local function displayStackResult(bagId, toSlot, fromStackSize, toStackSize, quantity)
+local function displayStackResult(bagId, toSlot, beforeValues, afterValues)
   if not savedVariables.hideStackInfo then
     local itemLink = GetItemLink(bagId, toSlot, LINK_STYLE_DEFAULT)
-    local toStackSizeAfter = toStackSize + quantity
-    local output = zo_strformat('Restacked <<5>><<t:1>>: [<<2>>][<<3>>] -> [<<4>>]', itemLink, toStackSize, fromStackSize, toStackSizeAfter, getIcon(bagId, toSlot))
-    if fromStackSize - quantity > 0 then
-      local fromStackSizeAfter = fromStackSize - quantity
-      output = zo_strformat('<<1>>[<<2>>]', output, fromStackSizeAfter)
-    end
+    local output = zo_strformat('Restacked <<4>><<t:1>>: <<2>> -> <<3>>', itemLink, beforeValues, afterValues, getIcon(bagId, toSlot))
     d(output)
   end
 end
@@ -107,31 +100,23 @@ local function moveItem(fromBagId, fromSlot, toBagId, toSlot, quantity)
 end
 
 -- create a table containing meta information for a slot
-local function createSlotData(bagId, bagSlot, bagSlotData, stackSize, addonLocks)
+local function createSlotData(bagId, bagSlot, bagSlotData, stackSize)
     return {
+      bagId = bagId,
       slot = bagSlot,
       data = bagSlotData,
-      stackSize = stackSize,
-      addonLocks = addonLocks
+      stackSize = stackSize
     }
 end
 
 local function checkIsAddonLocked(bagId, bagSlot)
-  local result = {}
+  return checkFCOLocks(bagId, bagSlot)
+    or checkItemSaverLock(bagId, bagSlot)
+    or checkFilterItLocks(bagId, bagSlot)
+end
 
-  if (checkFCOLocks(bagId, bagSlot)) then
-    table.insert(result, 'FCO ItemSaver')
-  end
-
-  if (checkItemSaverLock(bagId, bagSlot)) then
-    table.insert(result, 'Item Saver')
-  end
-
-  if (checkFilterItLocks(bagId, bagSlot)) then
-    table.insert(result, 'FilterIt')
-  end
-
-  return table.getn(result) > 0 and result or false
+local function toStackOutputFormat(stackSize)
+  return zo_strformat('[<<1>>]', stackSize)
 end
 
 --[[ restack the bag by a given bagId (defaults to BAG_BACKPACK) by iterating over every bag slot of that bag and
@@ -142,8 +127,8 @@ local function restackBag(bagId)
 
   local didRestack = false
   local bagCache = SHARED_INVENTORY:GenerateFullSlotData(nil, bagId)
-  local stacks = {}
-  local lockedStacks = {}
+  local unfinishedStacks = {}
+  local restackCandidates = {}
 
   for bagSlot, bagSlotData in pairs(bagCache) do
     local stackSize, maxStackSize = GetSlotStackSize(bagId, bagSlot)
@@ -152,50 +137,89 @@ local function restackBag(bagId)
 
     stackId = stackId .. (bagSlotData.stolen and 1 or 0)
 
-    if stackSize < maxStackSize then -- only look for unfinished sracks
-      local addonLocks = checkIsAddonLocked(bagId, bagSlot)
-      local hasAddonLockedStacks = lockedStacks[stackId] ~= nil
-      local stackTable = addonLocks and lockedStacks or stacks
-      local stack = stackTable[stackId]
-      local first = false
-      if not stack then
-        stack = {}
-        stackTable[stackId] = stack
-        first = true
-      end
+    if stackSize < maxStackSize then -- only look for unfinished stacks
+      local stacksForCurrentId = unfinishedStacks[stackId]
 
-      table.insert(stack, createSlotData(bagId, bagSlot, bagSlotData, stackSize, addonLocks))
+      local slotData = createSlotData(bagId, bagSlot, bagSlotData, stackSize)
 
-      if not first or hasAddonLockedStacks then
-        if addonLocks or not addonLocks and hasAddonLockedStacks then
-          displaySkipMessage(bagId, bagSlot, addonLocks)
-        end
-        if not addonLocks then
-          local toData = stack[1]
-          local toSlot = toData.slot
-          local toStackSize = toData.stackSize
-          local quantity = zo_min(stackSize, maxStackSize - toStackSize)
+      local locked = checkIsAddonLocked(bagId, bagSlot)
 
-          moveItem(bagId, bagSlot, bagId, toSlot, quantity)
+      if stacksForCurrentId then
+        local firstStack = stacksForCurrentId[1]
+        local candidateInfo = restackCandidates[stackId]
 
-          didRestack = true
-          triedAlready[bagId] = false
-
-          local stackFilled = toStackSize + quantity == maxStackSize
-          if stackFilled then
-            table.remove(stack, 1)
-            if quantity ~= stackSize then
-              table.insert(stack, createSlotData(bagId, bagSlot, bagSlotData, stackSize - quantity, instanceId))
-            end
+        if not candidateInfo then
+          candidateInfo = { stacks = {}, lockedStackInfo = nil, maxStackSize = maxStackSize }
+          if (firstStack.locked) then
+            candidateInfo.lockedStackInfo = firstStack
           else
-            toData.stackSize = toStackSize + quantity
+            table.insert(candidateInfo.stacks, firstStack)
           end
-
-          displayStackResult(bagId, toSlot, stackSize, toStackSize, quantity)
         end
+        if locked then
+          candidateInfo.lockedStackInfo = candidateInfo.lockedStackInfo or slotData;
+        else
+          table.insert(candidateInfo.stacks, slotData)
+        end
+
+        restackCandidates[stackId] = candidateInfo
+      else
+        stacksForCurrentId = { locked = locked }
+        unfinishedStacks[stackId] = stacksForCurrentId
+        table.insert(stacksForCurrentId, slotData)
       end
     end
   end
+
+  for _, restackCandidate in pairs(restackCandidates) do
+    if restackCandidate.lockedStackInfo then
+      displaySkipMessage(bagId, restackCandidate.lockedStackInfo.slot)
+    end
+
+    local numberOfStacks = table.getn(restackCandidate.stacks)
+    if numberOfStacks > 1 then
+      local currentStack = restackCandidate.stacks[1]
+      local toSlot = currentStack.slot
+      local toStackSize = currentStack.stackSize
+      local beforeValues = toStackOutputFormat(toStackSize)
+      local afterValues = ''
+      local maxStackSize = restackCandidate.maxStackSize
+      for i = 2, numberOfStacks, 1 do
+        currentStack = restackCandidate.stacks[i]
+        local fromSlot = currentStack.slot
+        local fromStackSize = currentStack.stackSize
+        beforeValues = beforeValues .. toStackOutputFormat(fromStackSize)
+        local currentDifference = maxStackSize - toStackSize
+        local quantity = zo_min(fromStackSize, currentDifference)
+
+        moveItem(bagId, fromSlot, bagId, toSlot, quantity)
+        didRestack = true
+        triedAlready[bagId] = false
+
+        toStackSize = toStackSize + quantity
+        -- TODO: Restacked  [Crawlers]: [50][75][25][108] -> [200]
+        if toStackSize == maxStackSize then
+          afterValues = afterValues .. toStackOutputFormat(toStackSize)
+          if (fromStackSize ~= quantity) then
+            toSlot = fromSlot
+            toStackSize = fromStackSize - quantity
+            if i == numberOfStacks then
+              afterValues = afterValues .. toStackOutputFormat(toStackSize)
+            end
+          elseif i < numberOfStacks then
+            i = i + 1
+            currentStack = restackCandidate.stacks[i]
+            toSlot = currentStack.slot
+            toStackSize = currentStack.stackSize
+          end
+        elseif i == numberOfStacks then
+          afterValues = afterValues .. toStackOutputFormat(toStackSize)
+        end
+      end
+      displayStackResult(bagId, toSlot, beforeValues, afterValues)
+    end
+  end
+
   return didRestack
 end
 
