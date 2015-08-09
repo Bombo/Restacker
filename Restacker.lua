@@ -197,7 +197,6 @@ local function restackBag(bagId)
         triedAlready[bagId] = false
 
         toStackSize = toStackSize + quantity
-        -- TODO: Restacked  [Crawlers]: [50][75][25][108] -> [200]
         if toStackSize == maxStackSize then
           afterValues = afterValues .. toStackOutputFormat(toStackSize)
           if (fromStackSize ~= quantity) then
